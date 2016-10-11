@@ -389,6 +389,35 @@ export class Install {
     }
 
     const flattenedPatterns = [];
+    let y = this.resolver.getAllDependencyNamesByLevelOrder(patterns)
+    let x = this.resolver.getLevelOrderManifests(patterns)
+
+
+    console.log('in')
+    console.log(patterns)
+    console.log(x)
+    console.log(y)
+    console.log('out')
+
+
+      // call a funcion where
+    // runs through the dependency graph, gets all dependency names and versions
+    // get a mapping of dependency: versions
+    // for every dependency, add to logic solver. implies, and if ~ or ^, then fold over a bunch of or's
+    // if *, then request all versions, and fold over a bunch of or's
+    // run solve
+    //
+    //
+    // extra: run over a weight solution set, price each by setting the weight of each major/minor/patch version
+    //
+    //
+    // open questions: how to get all versions of npm?
+    // 2. how to differentiate between npm vs bower here?
+    // const object = jsons[ref.registry].object;
+    //
+    // create a new DependencyConstraintResolver that takes in a set of dependencies, and calculates the final
+    // should have a registry tied to it. should be able to specify an api for taking in a package name, taking in a semver,
+    // and returning all the valid package versions that correspond to it
 
     for (const name of this.resolver.getAllDependencyNamesByLevelOrder(patterns)) {
       const infos = this.resolver.getAllInfoForPackageName(name).filter((manifest: Manifest): boolean => {
@@ -436,10 +465,12 @@ export class Install {
 
       flattenedPatterns.push(this.resolver.collapseAllVersionsOfPackage(name, version));
     }
+    console.log('hwjowfjeo', this.resolutions)
 
     // save resolutions to their appropriate root manifest
     if (Object.keys(this.resolutions).length) {
       const jsons = await this.getRootManifests();
+      console.log(jsons)
 
       for (const name in this.resolutions) {
         const version = this.resolutions[name];
