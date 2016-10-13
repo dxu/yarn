@@ -11,8 +11,11 @@ import RequestManager from './util/request-manager.js';
 import BlockingQueue from './util/blocking-queue.js';
 import Lockfile from './lockfile/wrapper.js';
 import map from './util/map.js';
+import Logic from 'logic-solver'
 
 const invariant = require('invariant');
+
+// TODO: remove this
 
 export default class PackageResolver {
   constructor(config: Config, lockfile: Lockfile) {
@@ -23,6 +26,9 @@ export default class PackageResolver {
     this.patterns = map();
     this.usedRegistries = new Set();
     this.flat = false;
+
+    this.dependencyTree = []
+    this.logicSolver;
 
     this.reporter = config.reporter;
     this.lockfile = lockfile;
@@ -208,6 +214,8 @@ export default class PackageResolver {
   getAllInfoForPackageName(name: string): Array<Manifest> {
     const infos = [];
     const seen = new Set();
+    console.log('this.', this.patterns)
+    throw new Error('jjj')
 
     for (const pattern of this.patternsByPackage[name]) {
       const info = this.patterns[pattern];
@@ -405,9 +413,38 @@ export default class PackageResolver {
     if (parentRequest && parentRequest.visibility) {
       req.visibility = parentRequest.visibility;
     }
+    console.log('this', this.patterns)
 
     const request = new PackageRequest(req, this);
-    await request.find();
+    let manifest = await request.find();
+
+    // if flat, then start building the solver here
+    if (this.flat) {
+      this._updateLogicSolver(req)
+      console.log('this is manifest destiny', manifest)
+    }
+
+
+
+  }
+
+  // updates the logic solver with the appropriate
+  _updateLogicSolver(pkg, dependency) {
+    // if dependency is not involved, we don't need to set up the implies
+    const {name, range, hasVersion} = PackageRequest.normalizePattern(pkg.pattern);
+
+    // get all valid ranges for the package -
+    // TODO: proper way to deduplicate/reuse the version request
+    // TODO: bower implementation
+
+
+      console.log('this is the name', this.patternsByPackage[name])
+    // registry
+
+    console.log('name: ', name)
+    console.log('range: ', range)
+    console.log('hasVersion: ', hasVersion)
+
   }
 
   /**
@@ -417,14 +454,22 @@ export default class PackageResolver {
   async init(deps: DependencyRequestPatterns, isFlat: boolean): Promise<void> {
     this.flat = isFlat;
 
+    // if flat, then start building the solver here
+    if (this.flat) {
+      this.logicSolver = new Logic.Solver()
+    }
     //
     const activity = this.activity = this.reporter.activity();
 
     //
-    this.seedPatterns = deps.map((dep): string => dep.pattern);
+    this.seedPatterns = this.dependencyTree = deps.map((dep): string => dep.pattern);
+
 
     //
     await Promise.all(deps.map((req): Promise<void> => this.find(req)));
+
+    console.log('seed patterns', this.seedPatterns)
+    console.log('this', this.fetchingPatterns)
 
     activity.end();
     this.activity = null;

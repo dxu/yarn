@@ -225,7 +225,7 @@ export default class PackageRequest {
       ref.addPattern(this.pattern, resolved);
       ref.addOptional(this.optional);
       ref.addVisibility(this.visibility);
-      return;
+      return info;
     }
 
     if (info.flat && !this.resolver.flat) {
@@ -279,6 +279,7 @@ export default class PackageRequest {
 
     await Promise.all(promises);
     ref.addDependencies(deps);
+    return info
   }
 
   /**

@@ -28,6 +28,7 @@ export default class NpmResolver extends RegistryResolver {
       range = body['dist-tags'][range];
     }
 
+    // TODO: remove this if flatten
     const satisfied = await config.resolveConstraints(Object.keys(body.versions), range);
     if (satisfied) {
       return body.versions[satisfied];
@@ -39,6 +40,13 @@ export default class NpmResolver extends RegistryResolver {
     }
   }
 
+  // TODO: change return type
+  // static async requestAllVersions(name: string, registry): Object {
+  //   const body = await this.config.registries.npm.request(NpmRegistry.escapeName(this.name));
+  //   console.log('requesting all versions')
+  //   return body
+  // }
+
   async resolveRequest(): Promise<?Manifest> {
     if (this.config.offline) {
       const res = this.resolveRequestOffline();
@@ -47,9 +55,17 @@ export default class NpmResolver extends RegistryResolver {
       }
     }
 
+    // makes a request to https://registry.yarnpkg.com/<escaped package name>
     const body = await this.config.registries.npm.request(NpmRegistry.escapeName(this.name));
+    console.log('hh')
+    console.log(this.name)
+    console.log('hellokoij', NpmRegistry.escapeName(this.name))
 
     if (body) {
+      console.log('this.range', this.range)
+      // throw new Error('tet,')
+      // if a body was found, then store the package metadata in the constraint resolver
+      this.config.addPackageMetadataToConstraintSolver(body, this.range)
       return await NpmResolver.findVersionInRegistryResponse(this.config, this.range, body);
     } else {
       return null;

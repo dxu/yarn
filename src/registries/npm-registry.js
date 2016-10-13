@@ -48,6 +48,8 @@ export default class NpmRegistry extends Registry {
 
   request(pathname: string, opts?: RegistryRequestOptions = {}): Promise<?Object> {
     const registry = removeSuffix(String(this.registries.yarn.getOption('registry')), '/');
+    console.log('urlll', url.resolve(registry, pathname))
+
 
     const headers = {};
     if (this.token) {
@@ -63,6 +65,12 @@ export default class NpmRegistry extends Registry {
       json: true,
     });
   }
+
+  // returns all versions of a package
+  // async getAllVersions(name:string) {
+  //   const body = await this.request(NpmRegistry.escapeName(name));
+  //   return body
+  // }
 
   async checkOutdated(config: Config, name: string, range: string): CheckOutdatedReturn {
     const req = await this.request(name);

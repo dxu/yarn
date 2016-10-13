@@ -26,6 +26,9 @@ import * as fs from '../../util/fs.js';
 import * as util from '../../util/misc.js';
 import map from '../../util/map.js';
 
+import parsePackageName from '../../util/parse-package-name.js';
+import DependencyConstraintResolver from '../../dependency-constraint-resolver.js'
+
 const invariant = require('invariant');
 const emoji = require('node-emoji');
 const path = require('path');
@@ -230,6 +233,8 @@ export class Install {
 
       pushDeps('optionalDependencies', {hint: 'optional', visibility: PackageReference.USED, optional: true});
 
+      console.log('dependencies', deps)
+
       break;
     }
 
@@ -286,6 +291,8 @@ export class Install {
 
   async init(): Promise<Array<string>> {
     let [depRequests, rawPatterns] = await this.fetchRequestFromCwd();
+
+    console.log('wjofiwjeofijweofhj auh gh', depRequests, rawPatterns)
     const match = await this.matchesIntegrityHash(rawPatterns);
 
     const prepared = await this.prepare(rawPatterns, depRequests, match);
@@ -307,9 +314,12 @@ export class Install {
     let patterns = rawPatterns;
     const steps: Array<(curr: number, total: number) => Promise<void>> = [];
 
+    console.log('flattening')
     steps.push(async (curr: number, total: number) => {
       this.reporter.step(curr, total, this.reporter.lang('resolvingPackages'), emoji.get('mag'));
       await this.resolver.init(depRequests, this.flags.flat);
+      console.log('aptt', rawPatterns)
+      // throw new Error('johu')
       patterns = await this.flatten(rawPatterns);
     });
 
@@ -317,6 +327,7 @@ export class Install {
       this.reporter.step(curr, total, this.reporter.lang('fetchingPackages'), emoji.get('truck'));
       await this.fetcher.init();
       await this.compatibility.init();
+      console.log('shouldnt hit')
     });
 
     steps.push(async (curr: number, total: number) => {
@@ -392,12 +403,32 @@ export class Install {
     let y = this.resolver.getAllDependencyNamesByLevelOrder(patterns)
     let x = this.resolver.getLevelOrderManifests(patterns)
 
+    let depRes = new DependencyConstraintResolver(this.resolver)
 
-    console.log('in')
-    console.log(patterns)
-    console.log(x)
+
+    // depRes.resolve(patterns)
+    console.log('registries')
+    console.log(registries)
+    console.log('y')
     console.log(y)
-    console.log('out')
+    // throw new Error('jj')
+
+    patterns.map(async (pattern) => {
+
+      const {name, range, hasVersion} = PackageRequest.normalizePattern(pattern);
+      console.log('name', name);
+
+      let body = await this.config.registries.npm.getAllVersions(name);
+      // get the versions of all
+      console.log('wjjj')
+      console.log(body)
+
+    })
+
+    // console.log('in')
+    // console.log(patterns)
+    // console.log(x)
+    // console.log('out')
 
 
       // call a funcion where
@@ -465,12 +496,12 @@ export class Install {
 
       flattenedPatterns.push(this.resolver.collapseAllVersionsOfPackage(name, version));
     }
-    console.log('hwjowfjeo', this.resolutions)
+    // console.log('hwjowfjeo', this.resolutions)
 
     // save resolutions to their appropriate root manifest
     if (Object.keys(this.resolutions).length) {
       const jsons = await this.getRootManifests();
-      console.log(jsons)
+      // console.log(jsons)
 
       for (const name in this.resolutions) {
         const version = this.resolutions[name];

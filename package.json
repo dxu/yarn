@@ -20,6 +20,7 @@
     "invariant": "^2.2.0",
     "is-builtin-module": "^1.0.0",
     "leven": "^2.0.0",
+    "logic-solver": "^2.0.1",
     "loud-rejection": "^1.2.0",
     "minimatch": "^3.0.3",
     "mkdirp": "^0.5.1",

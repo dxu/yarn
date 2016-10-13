@@ -123,6 +123,22 @@ export default class Config {
     return this.registries.yarn.getOption(key);
   }
 
+
+  /**
+   * update the constraint solver with the package metadata
+   */
+  addPackageMetadataToConstraintSolver(pkg: Object): void {
+    this.constraintResolver.addPackageMetadata(pkg)
+  }
+
+  /**
+   * Adds a new constraint
+   */
+  addConstraint(pkg, dependencies) {
+    return this.constraintResolver.addConstraint(pkg, dependencies)
+  }
+
+
   /**
    * Reduce a list of versions to a single one based on an input range.
    */
