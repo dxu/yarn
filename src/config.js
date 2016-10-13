@@ -127,8 +127,8 @@ export default class Config {
   /**
    * update the constraint solver with the package metadata
    */
-  addPackageMetadataToConstraintSolver(pkg: Object): void {
-    this.constraintResolver.addPackageMetadata(pkg)
+  addPackageMetadataToConstraintSolver(pkg: Object, currentRange: string): void {
+    this.constraintResolver.addPackageMetadata(pkg, currentRange: string)
   }
 
   /**

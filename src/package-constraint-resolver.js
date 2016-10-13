@@ -21,6 +21,15 @@ export default class PackageConstraintResolver {
     // a map of name -> package versions
     this.packageVersionMetadata = {}
 
+    // for every package in revisit, if we're adding package metadata, these are
+    // all of the packages that need to be added but couldn't prior to this because
+    // we didn't have all the available ranges.E
+    // It should contain a mapping of
+    // pkg name : {
+    //   pkg version range: other dependency in the form of `pkg.name pkg.version`
+    // }
+    this.revisit = {}
+
     // logic solver
     this.logicSolver = new Logic.Solver()
   }
@@ -60,7 +69,7 @@ export default class PackageConstraintResolver {
     // console.log('keys', this.packageVersionMetadata[pkg.name])
 
 
-    const valid = []
+    let valid = []
     // TODO: formalize this
     // if its in the form XX.XX.XX
     let regex = /^[0-9]+\.[0-9]+.[0-9]+$/
@@ -72,18 +81,42 @@ export default class PackageConstraintResolver {
     }
     // otherwise there's a range, require OR all the versions that match
     else {
-      valid = this.pkg.versions.filter((ver) => {
-        return semver.satisfies(ver, currentVersionRange)
-      })
-      this.logicSolver.or(valid)
+      // console.log('jjj')
+      valid = Object.keys(pkg.versions).
+        filter((ver) => {
+          // console.log(currentVersionRange, ver)
+          // console.log(semver.satisfies(ver, currentVersionRange))
+          return semver.satisfies(ver, currentVersionRange)
+        })
+
+      this.logicSolver.require(Logic.or(valid.map(ver => `${pkg.name} ${ver}`)))
     }
 
     // for every valid, you must go through all valid versions and add all
     // implies dependencies
 
     console.log(valid)
-    throw new Error('ajjj')
     valid.map((ver) => {
+      // grab the version and add dependencies
+      let pkgInfo = pkg.versions[ver]
+
+      let dependencies = pkgInfo.dependencies
+
+      for (let name in dependencies) {
+        let versionRange = dependencies[name]
+        // for every dependency, if there's a range, then you require()
+        if (versionRange.match(regex)) {
+        }
+        // otherwise, check the versionsmap. if we've already grabbed the metadata
+        // before this, then we can add the implies. otherwise add it to the "revisit" cache
+        // so that when taht dependency's metadata is fetched, we can get stuf
+
+      }
+
+
+
+
+      return valid
 
     })
 
