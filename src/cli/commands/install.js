@@ -324,6 +324,15 @@ export class Install {
     });
 
     steps.push(async (curr: number, total: number) => {
+      let solutions = []
+  let curSol
+      // console.log
+      while ((curSol = this.config.constraintResolver.logicSolver.solve())) {
+        solutions.push(curSol.getTrueVars());
+        this.config.constraintResolver.logicSolver.forbid(curSol.getFormula()); // forbid the current solution
+      }
+      console.log('TESTING', solutions)
+      throw new Error()
       this.reporter.step(curr, total, this.reporter.lang('fetchingPackages'), emoji.get('truck'));
       await this.fetcher.init();
       await this.compatibility.init();
@@ -418,10 +427,10 @@ export class Install {
       const {name, range, hasVersion} = PackageRequest.normalizePattern(pattern);
       console.log('name', name);
 
-      let body = await this.config.registries.npm.getAllVersions(name);
+      // let body = await this.config.registries.npm.getAllVersions(name);
       // get the versions of all
-      console.log('wjjj')
-      console.log(body)
+      // console.log('wjjj')
+      // console.log(body)
 
     })
 

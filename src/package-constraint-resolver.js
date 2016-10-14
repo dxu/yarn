@@ -77,7 +77,7 @@ export default class PackageConstraintResolver {
     let explicitSemverRegex = /^[0-9]+\.[0-9]+.[0-9]+$/
     if (currentVersionRange.match(explicitSemverRegex)) {
       // space for easy splitting
-      this.logicSolver.require(`${pkg.name} ${currentVersionRange}`)
+      this.logicSolver.require(Logic.exactlyOne(`${pkg.name} ${currentVersionRange}`))
       console.log('requiring ', `${pkg.name} ${currentVersionRange}`)
       valid = [currentVersionRange]
     }
@@ -109,7 +109,7 @@ export default class PackageConstraintResolver {
 
         // for every dependency, if there is no range, then you require()
         if (depVersionRange.match(explicitSemverRegex)) {
-          this.logicSolver.require(`${depName} ${depVersionRange}`)
+          this.logicSolver.require(Logic.exactlyOne(`${depName} ${depVersionRange}`))
         }
         console.log('hit here')
         let depVersions = this.packageVersionMetadataMap[depName]
@@ -117,8 +117,8 @@ export default class PackageConstraintResolver {
         // otherwise, check the packageVersionMetadataMap. if we've already grabbed the metadata
         // before this, then we can add the implies.
         if (depVersions != null) {
-          depVersions.map(function(depVersion) {
-            this.logicSolver.require(Logic.implies(`${pkg.name} ${currentVersion}`, `${depName} ${depVersion}`))
+          depVersions.map((depVersion) => {
+            this.logicSolver.require(Logic.implies(Logic.exactlyOne(`${pkg.name} ${currentVersion}`), Logic.exactlyOne(`${depName} ${depVersion}`)))
           })
         console.log('hit here3')
         }
@@ -135,11 +135,26 @@ export default class PackageConstraintResolver {
 
     })
     console.log(this.revisitCache)
-    throw new Error()
 
     // you can get the dependencies here
 
+    // TODO: extract
+    const allVersions = Object.keys(pkg.versions)
     // TODO: if there's a revisit cache entry for this package name, go through and add all the entries to the logic solver!!!
+    if (this.revisitCache[pkg.name] != null) {
+      // for every version range, grab every version
+      for (let versionRange in this.revisitCache[pkg.name]) {
+        let validVersions = allVersions.filter(function(pkgVer) {
+          return semver.satisfies(pkgVer, versionRange)
+        })
+        // add implies rule
+        validVersions.map((validVer) => {
+          // Note that this package DEPENDS ON the stored revisit cache! hence the inverse implies here
+          this.logicSolver.require(Logic.implies(Logic.exactlyOne(this.revisitCache[pkg.name][versionRange]), Logic.exactlyOne(`${pkg.name} ${validVer}`)))
+        })
+      }
+    }
+    // throw new Error()
 
   }
 

@@ -215,7 +215,6 @@ export default class PackageResolver {
     const infos = [];
     const seen = new Set();
     console.log('this.', this.patterns)
-    throw new Error('jjj')
 
     for (const pattern of this.patternsByPackage[name]) {
       const info = this.patterns[pattern];
