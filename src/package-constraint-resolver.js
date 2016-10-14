@@ -18,17 +18,18 @@ export default class PackageConstraintResolver {
   constructor(config: Config, reporter: Reporter) {
     this.reporter = reporter;
     this.config = config;
-    // a map of name -> package versions
-    this.packageVersionMetadata = {}
+    // a map of name -> all possible package versions
+    this.packageVersionMetadataMap = {}
 
     // for every package in revisit, if we're adding package metadata, these are
     // all of the packages that need to be added but couldn't prior to this because
     // we didn't have all the available ranges.E
     // It should contain a mapping of
     // pkg name : {
-    //   pkg version range: other dependency in the form of `pkg.name pkg.version`
+    //   pkg version range: [other dependencies in the form of `pkg.name pkg.version`]
     // }
-    this.revisit = {}
+    // it's an array because multiple packages could contain the same dependency
+    this.revisitCache = {}
 
     // logic solver
     this.logicSolver = new Logic.Solver()
@@ -65,15 +66,16 @@ export default class PackageConstraintResolver {
   addPackageMetadata(pkg: Object, currentVersionRange: string): void {
     // store the version information for finding all valid package versions in
     // the future
-    this.packageVersionMetadata[pkg.name] = Object.keys(pkg.versions)
-    // console.log('keys', this.packageVersionMetadata[pkg.name])
+    this.packageVersionMetadataMap[pkg.name] = Object.keys(pkg.versions)
+    // console.log('keys', this.packageVersionMetadataMap[pkg.name])
 
 
+    console.log('hi')
     let valid = []
     // TODO: formalize this
     // if its in the form XX.XX.XX
-    let regex = /^[0-9]+\.[0-9]+.[0-9]+$/
-    if (currentVersionRange.match(regex)) {
+    let explicitSemverRegex = /^[0-9]+\.[0-9]+.[0-9]+$/
+    if (currentVersionRange.match(explicitSemverRegex)) {
       // space for easy splitting
       this.logicSolver.require(`${pkg.name} ${currentVersionRange}`)
       console.log('requiring ', `${pkg.name} ${currentVersionRange}`)
@@ -95,32 +97,49 @@ export default class PackageConstraintResolver {
     // for every valid, you must go through all valid versions and add all
     // implies dependencies
 
-    console.log(valid)
-    valid.map((ver) => {
+    console.log('valid: ', valid)
+    valid.map((currentVersion) => {
       // grab the version and add dependencies
-      let pkgInfo = pkg.versions[ver]
+      let pkgInfo = pkg.versions[currentVersion]
 
       let dependencies = pkgInfo.dependencies
 
-      for (let name in dependencies) {
-        let versionRange = dependencies[name]
-        // for every dependency, if there's a range, then you require()
-        if (versionRange.match(regex)) {
-        }
-        // otherwise, check the versionsmap. if we've already grabbed the metadata
-        // before this, then we can add the implies. otherwise add it to the "revisit" cache
-        // so that when taht dependency's metadata is fetched, we can get stuf
+      for (let depName in dependencies) {
+        let depVersionRange = dependencies[depName]
 
+        // for every dependency, if there is no range, then you require()
+        if (depVersionRange.match(explicitSemverRegex)) {
+          this.logicSolver.require(`${depName} ${depVersionRange}`)
+        }
+        console.log('hit here')
+        let depVersions = this.packageVersionMetadataMap[depName]
+        console.log('hit here2')
+        // otherwise, check the packageVersionMetadataMap. if we've already grabbed the metadata
+        // before this, then we can add the implies.
+        if (depVersions != null) {
+          depVersions.map(function(depVersion) {
+            this.logicSolver.require(Logic.implies(`${pkg.name} ${currentVersion}`, `${depName} ${depVersion}`))
+          })
+        console.log('hit here3')
+        }
+        // otherwise add it to the "revisit" cache
+        // so that when the dependency's metadata is fetched in the future, we can update the logic solver
+        else {
+        console.log('hit here4')
+          this.revisitCache[depName] = this.revisitCache[depName] || {}
+          this.revisitCache[depName][depVersionRange] = this.revisitCache[depName][depVersionRange] || []
+          this.revisitCache[depName][depVersionRange].push(`${pkg.name} ${currentVersion}`)
+        console.log('hit here5')
+        }
       }
 
-
-
-
-      return valid
-
     })
+    console.log(this.revisitCache)
+    throw new Error()
 
     // you can get the dependencies here
+
+    // TODO: if there's a revisit cache entry for this package name, go through and add all the entries to the logic solver!!!
 
   }
 
