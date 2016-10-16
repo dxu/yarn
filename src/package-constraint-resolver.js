@@ -62,36 +62,69 @@ export default class PackageConstraintResolver {
     return this.logicSolver.solve()
   }
 
+  // given a package name and a version, create a logic term
+  _createLogicTerm(name, ver) {
+    return `${name} ${ver}`
+  }
+
+  // given a logic term, generate the package name and version it represents
+  // in the form [name, version]
+  _parseLogicTerm(term) {
+    return term.split(' ')
+  }
+
+
+  // TODO: in the future, the package constraint resolver should be
+  // in charge of actually requesting the packages' metadata, not the package resolver
+  // the flow should go package resolver -> constraint solver -> package request
+  // the constraint solver should be a black box taht pops out the list of
+  // required packages.
+  //
+  // the package resolver can then make the individual version requests if necessary
+  //
+  //
+
   // add any relevant package metadata needed for solving constraints
+  // if no currentVersionRange is passed in, this means that this is a
+  // dependency that is being checked. Only top level dependencies should
+  // have currentVersionRanges. All dependencies below TLD should be
+  // calculated.
   addPackageMetadata(pkg: Object, currentVersionRange: string): void {
-    // store the version information for finding all valid package versions in
+    // store the version information for finding all valid package versions for
     // the future
-    this.packageVersionMetadataMap[pkg.name] = Object.keys(pkg.versions)
-    // console.log('keys', this.packageVersionMetadataMap[pkg.name])
+    const keys = this.packageVersionMetadataMap[pkg.name] = Object.keys(pkg.versions)
 
+    // you can have at most one of these package versions,
+    // in the form `NAME VER`
+    this.logicSolver.require(
+      Logic.atMostOne(...keys.map(ver => this._createLogicTerm(pkg.name, ver)))
+    )
 
-    console.log('hi')
+    // all possible valid versions of this package
     let valid = []
-    // TODO: formalize this
-    // if its in the form XX.XX.XX
+
+    // TODO: make check more robust
+    // string of the form XXXX.XXXX.XXXX where X is a digit from 0-9
     let explicitSemverRegex = /^[0-9]+\.[0-9]+.[0-9]+$/
     if (currentVersionRange.match(explicitSemverRegex)) {
-      // space for easy splitting
-      this.logicSolver.require(Logic.exactlyOne(`${pkg.name} ${currentVersionRange}`))
-      console.log('requiring ', `${pkg.name} ${currentVersionRange}`)
+      // currentVersionRange is an explicit semver,so we need to require it
+      this.logicSolver.require(
+        Logic.exactlyOne(_createLogicTerm(pkg.name, currentVersionRange))
+      )
+      // console.log('requiring ', `${pkg.name} ${currentVersionRange}`)
       valid = [currentVersionRange]
     }
-    // otherwise there's a range, require OR all the versions that match
+    // otherwise there's a range, require at most one of
+    // all the versions that match
     else {
-      // console.log('jjj')
       valid = Object.keys(pkg.versions).
         filter((ver) => {
-          // console.log(currentVersionRange, ver)
-          // console.log(semver.satisfies(ver, currentVersionRange))
           return semver.satisfies(ver, currentVersionRange)
         })
 
-      this.logicSolver.require(Logic.or(valid.map(ver => `${pkg.name} ${ver}`)))
+      this.logicSolver.require(
+        Logic.atMostOne(...valid.map(ver => `${pkg.name} ${ver}`))
+      )
     }
 
     // for every valid, you must go through all valid versions and add all
@@ -107,10 +140,20 @@ export default class PackageConstraintResolver {
       for (let depName in dependencies) {
         let depVersionRange = dependencies[depName]
 
-        // for every dependency, if there is no range, then you require()
+        // for every dependency, if there is no range, then you can
+        // immediatel require() this package with this version, AND'ed with
+        // the current package and current version. We use an AND because
+        // we only want to require this dependency if pkg.name + currentVersion
+        // is true (i.e, we chose that package in the final solution)
         if (depVersionRange.match(explicitSemverRegex)) {
-          this.logicSolver.require(Logic.exactlyOne(`${depName} ${depVersionRange}`))
+          this.logicSolver.require(
+            Logic.and(
+              this._createLogicTerm(pkg.name, currentVersion),
+              this._createLogicTerm(depName, depVersionRange)
+            )
+          )
         }
+
         console.log('hit here')
         let depVersions = this.packageVersionMetadataMap[depName]
         console.log('hit here2')

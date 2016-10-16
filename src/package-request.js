@@ -120,7 +120,8 @@ export default class PackageRequest {
 
     const Resolver = this.getRegistryResolver();
     const resolver = new Resolver(this, name, range);
-    return resolver.resolve();
+    // if it has no parent request, then it's a top level dependency
+    return resolver.resolve(this.parentRequest != null);
   }
 
   /**
@@ -250,6 +251,8 @@ export default class PackageRequest {
     // start installation of dependencies
     const promises = [];
     const deps = [];
+
+    // add all these dependencies
 
     // normal deps
     for (const depName in info.dependencies) {

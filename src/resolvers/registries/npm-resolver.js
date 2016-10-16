@@ -47,9 +47,9 @@ export default class NpmResolver extends RegistryResolver {
   //   return body
   // }
 
-  async resolveRequest(): Promise<?Manifest> {
+  async resolveRequest(tld: boolean): Promise<?Manifest> {
     if (this.config.offline) {
-      const res = this.resolveRequestOffline();
+      const res = this.resolveRequestOffline(tld);
       if (res != null) {
         return res;
       }
@@ -65,14 +65,20 @@ export default class NpmResolver extends RegistryResolver {
       console.log('this.range', this.range)
       // throw new Error('tet,')
       // if a body was found, then store the package metadata in the constraint resolver
-      this.config.addPackageMetadataToConstraintSolver(body, this.range)
+      // TODO: this check should be done elsewhere
+      if (tld) {
+        this.config.addPackageMetadataToConstraintSolver(body, this.range)
+      } else {
+        this.config.addPackageMetadataToConstraintSolver(body)
+      }
+
       return await NpmResolver.findVersionInRegistryResponse(this.config, this.range, body);
     } else {
       return null;
     }
   }
 
-  async resolveRequestOffline(): Promise<?Manifest> {
+  async resolveRequestOffline(tld: boolean): Promise<?Manifest> {
     // find modules of this name
     const prefix = `npm-${this.name}-`;
 
@@ -149,14 +155,15 @@ export default class NpmResolver extends RegistryResolver {
     }
   }
 
-  async resolve(): Promise<Manifest> {
+  // tld: is this trying to resolve a top level dependency?
+  async resolve(tld: boolean): Promise<Manifest> {
     // lockfile
     const shrunk = this.request.getLocked('tarball');
     if (shrunk) {
       return shrunk;
     }
 
-    const info: ?Manifest = await this.resolveRequest();
+    const info: ?Manifest = await this.resolveRequest(tld);
     if (info == null) {
       throw new MessageError(this.reporter.lang('packageNotFoundRegistry', this.name, 'npm'));
     }

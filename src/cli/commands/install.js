@@ -316,6 +316,8 @@ export class Install {
 
     console.log('flattening')
     steps.push(async (curr: number, total: number) => {
+      console.log(depRequests)
+      throw new Error()
       this.reporter.step(curr, total, this.reporter.lang('resolvingPackages'), emoji.get('mag'));
       await this.resolver.init(depRequests, this.flags.flat);
       console.log('aptt', rawPatterns)
