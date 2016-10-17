@@ -13,6 +13,8 @@ import Lockfile from './lockfile/wrapper.js';
 import map from './util/map.js';
 import Logic from 'logic-solver'
 
+import ConstraintResolver from './package-constraint-resolver.js';
+
 const invariant = require('invariant');
 
 // TODO: remove this
@@ -27,8 +29,9 @@ export default class PackageResolver {
     this.usedRegistries = new Set();
     this.flat = false;
 
+    this.constraintResolver = new ConstraintResolver(config, config.reporter, this)
+
     this.dependencyTree = []
-    this.logicSolver;
 
     this.reporter = config.reporter;
     this.lockfile = lockfile;
@@ -391,7 +394,7 @@ export default class PackageResolver {
    * TODO description
    */
 
-  async find(req: DependencyRequestPattern): Promise<void> {
+  async find(req: DependencyRequestPattern, tld?: boolean): Promise<void> {
     const fetchKey = `${req.registry}:${req.pattern}`;
     if (this.fetchingPatterns[fetchKey]) {
       return;
@@ -414,16 +417,11 @@ export default class PackageResolver {
     }
     console.log('this', this.patterns)
 
-    const request = new PackageRequest(req, this);
-    let manifest = await request.find();
+    // delegate to the logic solver to fetch package metadata
 
-    // if flat, then start building the solver here
-    if (this.flat) {
-      this._updateLogicSolver(req)
-      console.log('this is manifest destiny', manifest)
-    }
-
-
+    await this.constraintResolver.addPackage(req)
+    // const request = new PackageRequest(req, this);
+    // let manifest = await request.find();
 
   }
 
@@ -453,10 +451,6 @@ export default class PackageResolver {
   async init(deps: DependencyRequestPatterns, isFlat: boolean): Promise<void> {
     this.flat = isFlat;
 
-    // if flat, then start building the solver here
-    if (this.flat) {
-      this.logicSolver = new Logic.Solver()
-    }
     //
     const activity = this.activity = this.reporter.activity();
 
@@ -465,7 +459,7 @@ export default class PackageResolver {
 
 
     //
-    await Promise.all(deps.map((req): Promise<void> => this.find(req)));
+    await Promise.all(deps.map((req): Promise<void> => this.find(req, true)));
 
     console.log('seed patterns', this.seedPatterns)
     console.log('this', this.fetchingPatterns)

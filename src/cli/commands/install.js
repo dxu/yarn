@@ -317,7 +317,7 @@ export class Install {
     console.log('flattening')
     steps.push(async (curr: number, total: number) => {
       console.log(depRequests)
-      throw new Error()
+      // throw new Error()
       this.reporter.step(curr, total, this.reporter.lang('resolvingPackages'), emoji.get('mag'));
       await this.resolver.init(depRequests, this.flags.flat);
       console.log('aptt', rawPatterns)
@@ -334,7 +334,7 @@ export class Install {
         this.config.constraintResolver.logicSolver.forbid(curSol.getFormula()); // forbid the current solution
       }
       console.log('TESTING', solutions)
-      throw new Error()
+      // throw new Error()
       this.reporter.step(curr, total, this.reporter.lang('fetchingPackages'), emoji.get('truck'));
       await this.fetcher.init();
       await this.compatibility.init();

@@ -120,6 +120,7 @@ export default class PackageRequest {
 
     const Resolver = this.getRegistryResolver();
     const resolver = new Resolver(this, name, range);
+
     // if it has no parent request, then it's a top level dependency
     return resolver.resolve(this.parentRequest != null);
   }

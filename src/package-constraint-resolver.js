@@ -1,6 +1,8 @@
 /* @flow */
 
 import type {Reporter} from './reporters/index.js';
+import type PackageResolver from './package-resolver.js';
+import PackageRequest from './package-request.js';
 import type Config from './config.js';
 import Logic from 'logic-solver'
 
@@ -15,9 +17,10 @@ const semver = require('semver');
 // it should be used in: package resolver, npm resolver, package request
 
 export default class PackageConstraintResolver {
-  constructor(config: Config, reporter: Reporter) {
+  constructor(config: Config, reporter: Reporter, resolver: PackageResolver) {
     this.reporter = reporter;
     this.config = config;
+    this.resolver = resolver;
     // a map of name -> all possible package versions
     this.packageVersionMetadataMap = {}
 
@@ -41,6 +44,15 @@ export default class PackageConstraintResolver {
   reduce(versions: Array<string>, range: string): Promise<?string> {
     return Promise.resolve(semver.maxSatisfying(versions, range, this.config.looseSemver));
   }
+
+  // add package
+  async addPackage(req) {
+    const request = new PackageRequest(req, this.resolver);
+    let manifest = await request.find();
+
+  }
+
+
 
   // add package information. Anytime you fetch a package, you want to store
   // all version information for the package, so that you can resolve ranges
