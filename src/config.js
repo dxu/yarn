@@ -61,6 +61,7 @@ function sortObject(object: Object): Object {
 
 export default class Config {
   constructor(reporter: Reporter) {
+    // TODO: remove
     this.constraintResolver = new ConstraintResolver(this, reporter);
     this.requestManager = new RequestManager(reporter);
     this.reporter = reporter;

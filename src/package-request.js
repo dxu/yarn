@@ -19,6 +19,8 @@ const invariant = require('invariant');
 
 type ResolverRegistryNames = $Keys<typeof registryResolvers>;
 
+import NpmResolver from './resolvers/registries/npm-resolver.js'
+
 export default class PackageRequest {
   constructor(req: DependencyRequestPattern, resolver: PackageResolver) {
     this.parentRequest = req.parentRequest;
@@ -200,6 +202,14 @@ export default class PackageRequest {
     }
   }
 
+
+  // gets all package metadata from https://registry.yarnpkg.com/<package>
+  async getPackageMetadata(): Promise<?Manifest> {
+    const {range, name} = PackageRequest.normalizePattern(this.pattern);
+    // hardcode npm resolver for now
+    return NpmResolver.getPackageMetadata(this.config, name);
+  }
+
   /**
    * TODO description
    */
@@ -280,6 +290,8 @@ export default class PackageRequest {
     await Promise.all(promises);
     ref.addDependencies(deps);
   }
+
+
 
   /**
    * TODO description

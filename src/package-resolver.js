@@ -14,6 +14,9 @@ import map from './util/map.js';
 
 const invariant = require('invariant');
 
+
+import PackageConstraintResolver from './package-constraint-resolver.js'
+
 export default class PackageResolver {
   constructor(config: Config, lockfile: Lockfile) {
     this.patternsByPackage = map();
@@ -27,6 +30,9 @@ export default class PackageResolver {
     this.reporter = config.reporter;
     this.lockfile = lockfile;
     this.config = config;
+
+
+    this.constraintResolver = new PackageConstraintResolver(config, config.reporter, this)
   }
 
   // whether the dependency graph will be flattened
@@ -77,6 +83,9 @@ export default class PackageResolver {
 
   // environment specific config methods and options
   config: Config;
+
+  // contraint resolver used to solve dependency tree
+  constraintResolver: PackageConstraintResolver;
 
   /**
    * TODO description
@@ -406,8 +415,13 @@ export default class PackageResolver {
       req.visibility = parentRequest.visibility;
     }
 
-    const request = new PackageRequest(req, this);
-    await request.find();
+    if (parentRequest != null) {
+      // this is a top level dependency
+      return await this.constraintResolver.addPackage(req, true)
+    } else {
+      return await this.constraintResolver.addPackage(req)
+    }
+
   }
 
   /**
@@ -425,6 +439,13 @@ export default class PackageResolver {
 
     //
     await Promise.all(deps.map((req): Promise<void> => this.find(req)));
+    // console.log("finished all", this.constraintResolver.packageMetadata)
+
+
+    // now that you have all the metadata, you can run the constraint solver
+    this.constraintResolver.solve(this.seedPatterns)
+
+    // after you've solved, you have a set of solutions. you can now just run
 
     activity.end();
     this.activity = null;
