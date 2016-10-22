@@ -65,8 +65,13 @@ export default class PackageConstraintResolver {
     this.resolver = resolver
 
     // cache of all package metadata, mapped from name to manifest
+    // { [name]: [[Manifest]] }
     this.packageMetadata = {}
     this.currentlyFetching = {}
+
+    // { [name]: [[level]] }
+    // Always store the lowest level
+    this.levelMap = {}
 
     // logic solver
     this.logicSolver = new Logic.Solver()
@@ -86,18 +91,13 @@ export default class PackageConstraintResolver {
   // ALl this method is used for currently is for fetching all package metadata
   // It is called in the pipeline in place of Package Request's findVersionInfo
   // so that we can retain the package metadata
+  //
+  // TODO: I think level calculations won't work.. currently a DFS, so if
+  // you have redundant entries on the left branch, it's going to incorrectly
+  // calculate the level
+  //
   async addPackage(req: DependencyRequestPattern) {
     const request = new PackageRequest(req, this.resolver);
-
-    // starts off at level 1
-    let level = 1
-    let reqCheck = req
-
-    while(reqCheck.parentRequest != null) {
-      level++
-      reqCheck = reqCheck.parentRequest
-    }
-    console.log('level ', level, 'for package', req.pattern)
 
     // find the version info
 
@@ -148,6 +148,27 @@ export default class PackageConstraintResolver {
   }
 
 
+
+  /*
+   *
+   * TODO: SOLVE FOR LEVELS
+    // starts off at level 1
+    let level = 1
+    let reqCheck = req
+
+    while(reqCheck.parentRequest != null) {
+      level++
+      reqCheck = reqCheck.parentRequest
+    }
+
+    // store it in the level map
+    this.levelMap[info.name] = this.levelMap[info.name] != null ?
+      Math.min(this.levelMap[info.name], level) : level
+
+    console.log('level ', level, 'for package', req.pattern)
+
+   */
+
   // first call of all top level dependencies. We have to differentiate these
   // packages because theY MUST be required
   solve(topLevelDependencies): void {
@@ -168,11 +189,13 @@ export default class PackageConstraintResolver {
     // solve that shit
     topLevelDependencies.map((pattern) => {
       const {range, name} = PackageRequest.normalizePattern(pattern);
-      this.solvePackage(name, range)
+      this.solvePackage(1, name, range)
     })
 
     // finished everything
     console.log('finished solving dependency solutions')
+
+    console.log('level map', this.levelMap)
 
     const solutions = []
     let curSol
@@ -201,7 +224,10 @@ export default class PackageConstraintResolver {
   // add an implies relationship from the parent to the child, because if the parent is true, then the child must be true
   //
   // Update the dependency graph with the packages, so that we can use it to calculate relative weights of each package.
-  solvePackage(name, currentVersionRange, parent?: string): void {
+  solvePackage(level: number, name:string, currentVersionRange, parent: string): void {
+    // update the level map for the package if it hasn't been stored yet
+    this.levelMap[name] = Math.min(level, this.levelMap[name] || Infinity)
+
       // metadata
     const pkg = this.packageMetadata[name]
 
@@ -268,7 +294,7 @@ export default class PackageConstraintResolver {
       const dependencies = pkgInfo.dependencies
 
       for (const depName in dependencies) {
-        this.solvePackage(depName, dependencies[depName], this._createLogicTerm(pkg.name, currentVersion))
+        this.solvePackage(level + 1, depName, dependencies[depName], this._createLogicTerm(pkg.name, currentVersion))
       }
 
     })
