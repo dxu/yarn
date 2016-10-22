@@ -415,13 +415,7 @@ export default class PackageResolver {
       req.visibility = parentRequest.visibility;
     }
 
-    if (parentRequest != null) {
-      // this is a top level dependency
-      return await this.constraintResolver.addPackage(req, true)
-    } else {
-      return await this.constraintResolver.addPackage(req)
-    }
-
+    return await this.constraintResolver.addPackage(req)
   }
 
   /**

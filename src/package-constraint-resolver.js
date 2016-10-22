@@ -14,6 +14,46 @@ import Logic from 'logic-solver'
 
 import {USED as USED_VISIBILITY, default as PackageReference} from './package-reference.js';
 
+// a node in the package dependency graph. Used for calculating weights.
+// It is version agnostic. For each package node, it will contain (as children) all
+// dependencies for all versions.
+// Redundancies should be flattened - If there exists a package already, then
+// you should just store it at the higher node
+// class DepGraphNode {
+//   constructor(name='$root', parent, level=0) {
+//     this.name = name
+//     this.version = version
+//     this.level = level
+//     this.parent = parent
+//   }
+// }
+
+
+// Overall algorithm:
+// 1. Get all package metadata.
+// 2. While grabbing the package metadata, create the dependency graph
+// 3. set up constraints while traversing the graph
+// 4. have a depGraphMap mapping from package name to the dependency graph
+//    node for easy access
+// 5. Weight the solutions. in a dependency graph, at each level, are more important
+//    than the packages below them (top level packages are most important. After that,
+//    every package that is more recent will be higher priority. It can just be
+//    simply calculated (for now) as a straight ratio of current package # / total # of pacakges
+//      - do something for 2 package versions?
+//      - maybe instead of the raito, just do a strict subtraction of weight - but then how do you handle negatives? maybe max ?
+//    For each package version pattern:
+//    a. For each level, weight it according to (100 ^ -(level-1)) * (current package number) / (total packages)
+//
+//
+// Problem: We are currently collecting a flat array of all the packages, and just fetching metadata. with redundancies,
+//          there will be no way to differentiate a package A at level 2, that gets re-required at level 4. Level 4 package dependencies will then be determined to be level 3, even though they should be level 5
+//
+//
+// Alternative algorithm
+// Calculate the level on addPackage, and just store them as a flat map of objects. You can calculate the level by
+// continually looking for req.parentRequest() until you reach undefined
+
+
 // This isn't really a "proper" constraint resolver. We just return the highest semver
 // version in the versions passed that satisfies the input range. This vastly reduces
 // the complexity and is very efficient for package resolution.
@@ -46,8 +86,18 @@ export default class PackageConstraintResolver {
   // ALl this method is used for currently is for fetching all package metadata
   // It is called in the pipeline in place of Package Request's findVersionInfo
   // so that we can retain the package metadata
-  async addPackage(req: DependencyRequestPattern, isTld?: boolean = false) {
+  async addPackage(req: DependencyRequestPattern) {
     const request = new PackageRequest(req, this.resolver);
+
+    // starts off at level 1
+    let level = 1
+    let reqCheck = req
+
+    while(reqCheck.parentRequest != null) {
+      level++
+      reqCheck = reqCheck.parentRequest
+    }
+    console.log('level ', level, 'for package', req.pattern)
 
     // find the version info
 
@@ -83,7 +133,6 @@ export default class PackageConstraintResolver {
     }
     // fetch all dependencies metadata for all versions
     return await Promise.all(dependenciesToFetch);
-
   }
 
 
@@ -127,18 +176,31 @@ export default class PackageConstraintResolver {
 
     const solutions = []
     let curSol
-    // taken from docs
+    // get all possible solutions
     while ((curSol = this.logicSolver.solve())) {
       solutions.push(curSol.getTrueVars());
       this.logicSolver.forbid(curSol.getFormula()); // forbid the current solution
     }
+
+    // for every solution, get the weight, and then
     console.log(solutions)
+  }
+
+  // given a pattern, calculate the relative weight of the package version.
+  // Heuristics:
+  // If it's a top level dependency, then weight is ratio * 1000, for
+  // for every level you go down, divide by 100
+  //
+  getWeight(pattern) {
+
   }
 
 
   // If it is a TLD (it does not have any parent, then anytime there is an explicit version, you must require
   // it. If it is not a TLD, anytime there is an explicit version, you must
   // add an implies relationship from the parent to the child, because if the parent is true, then the child must be true
+  //
+  // Update the dependency graph with the packages, so that we can use it to calculate relative weights of each package.
   solvePackage(name, currentVersionRange, parent?: string): void {
       // metadata
     const pkg = this.packageMetadata[name]
