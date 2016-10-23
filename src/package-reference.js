@@ -22,6 +22,7 @@ export default class PackageReference {
     info: Manifest,
     remote: PackageRemote,
   ) {
+    console.log('test meff ')
     this.resolver = request.resolver;
     this.lockfile = request.lockfile;
     this.requests = [];
@@ -46,6 +47,7 @@ export default class PackageReference {
     this.location = null;
 
     this.addRequest(request);
+    console.log('test me ')
   }
 
   requests: Array<PackageRequest>;

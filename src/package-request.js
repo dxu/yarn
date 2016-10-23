@@ -203,11 +203,71 @@ export default class PackageRequest {
   }
 
 
-  // gets all package metadata from https://registry.yarnpkg.com/<package>
+  // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
+  // Delegates to the appropriate registry resolver
   async getPackageMetadata(): Promise<?Manifest> {
-    const {range, name} = PackageRequest.normalizePattern(this.pattern);
-    // hardcode npm resolver for now
-    return NpmResolver.getPackageMetadata(this.config, name);
+    const {range, name} = PackageRequest.normalizePattern(this.pattern)
+    const Resolver = this.getRegistryResolver();
+    // TODO: need to implement getPackageMetadata on all resolvers
+    return await Resolver.getPackageMetadata(this.config, name);
+  }
+
+  // For use in flatten, because the package metadata is fetched first,
+  // before the version is determined
+  updatePattern(pattern: string): void {
+    this.pattern = pattern
+  }
+
+  // what you should use after getPackageMetadata
+  async setupPackageReferences(): Promise<?Manifest> {
+    // find version info for this package pattern
+    const info: ?Manifest = await this.findVersionInfo();
+
+    console.log('woeifjoiweeeej ')
+    if (info.flat && !this.resolver.flat) {
+      throw new MessageError(this.reporter.lang('flatGlobalError'));
+    }
+    console.log('ojj ')
+
+    // console.log('hit here')
+    // validate version info
+    PackageRequest.validateVersionInfo(info, this.reporter);
+    //
+    const remote = info._remote;
+    invariant(remote, 'Missing remote');
+
+    // console.log('hit here')
+    // TODO: errors are being swallowed up here!
+
+    console.log('woeifjoij ')
+    console.log('woeifjoij22 ', remote, 'test')
+    // set package reference
+    const ref = new PackageReference(this, info, remote);
+    console.log('shuld her ')
+    ref.addPattern(this.pattern, info);
+    ref.addOptional(this.optional);
+    ref.addVisibility(this.visibility);
+    info._reference = ref;
+    info._remote = remote;
+
+    // start installation of dependencies
+    const deps = [];
+
+    // normal deps
+    for (const depName in info.dependencies) {
+      const depPattern = depName + '@' + info.dependencies[depName];
+      deps.push(depPattern);
+    }
+
+    // optional deps
+    for (const depName in info.optionalDependencies) {
+      const depPattern = depName + '@' + info.optionalDependencies[depName];
+      deps.push(depPattern);
+    }
+
+    ref.addDependencies(deps);
+
+    return info
   }
 
   /**

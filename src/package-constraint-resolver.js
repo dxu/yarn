@@ -75,6 +75,9 @@ export default class PackageConstraintResolver {
     // { [name]: [...versions] }
     this.packageVersions = {}
     this.currentlyFetching = {}
+    // cache of all PackageRequests from
+    // {[name]: [[PackageRequest]]}
+    this.packageRequests = {}
 
     // the terms and costs that will be used by the logicSolver to minimizeWeightedSum
     this.terms = []
@@ -114,11 +117,18 @@ export default class PackageConstraintResolver {
   // you have redundant entries on the left branch, it's going to incorrectly
   // calculate the level
   async addPackage(req: DependencyRequestPattern) {
+    const {range, name} = PackageRequest.normalizePattern(req.pattern);
+
     const request = new PackageRequest(req, this.resolver);
 
-    // find the version info
+    // cache the PackageRequests for now. After we run
+    // logicSolver.solve(), we will use them to update the references for a
+    // specific version.
+    this.packageRequests[name] = request
 
-    const info: ?Manifest = await request.getPackageMetadata();
+    // find the version info
+    const info: ?Manifest =
+      await request.getPackageMetadata();
 
     if (!info) {
       throw new MessageError(this.reporter.lang('unknownPackage', req.pattern));
@@ -156,13 +166,15 @@ export default class PackageConstraintResolver {
 
   // given a package name and a version, create a logic term
   _createLogicTerm(name, ver) {
-    return `${name} ${ver}`
+    // TODO: see if there is an existing method for this
+    return `${name}@${ver}`
   }
 
   // given a logic term, generate the package name and version it represents
   // in the form [name, version]
   _parseLogicTerm(term) {
-    return term.split(' ')
+    const {range, name} = PackageRequest.normalizePattern(pattern);
+    return [name, range]
   }
 
 
@@ -209,7 +221,7 @@ export default class PackageConstraintResolver {
   //
   // first call of all top level dependencies. We have to differentiate these
   // packages because theY MUST be required
-  solve(topLevelDependencies): void {
+  async solve(topLevelDependencies): void {
     // before you do anything, add atMostOne to all the packages currently
     // stored in the packageMetadata.
     for (let name in this.packageMetadata) {
@@ -256,6 +268,24 @@ export default class PackageConstraintResolver {
     console.log('costs', this.costs)
 
     solution = this.logicSolver.minimizeWeightedSum(solution, this.terms, this.costs)
+    const truthy = solution.getTrueVars()
+
+
+    let promises = []
+
+    // for every truthy solution, we now have to create all the package requests
+    // and make sure all package references are appropriately created
+    truthy.map((pattern) => {
+      console.log('hhhhhh')
+      const {range, name} = PackageRequest.normalizePattern(pattern);
+      const pkgReq = this.packageRequests[name]
+      pkgReq.updatePattern(pattern);
+      // TODO: parallelize
+      promises.push(pkgReq.setupPackageReferences())
+    })
+
+    await Promise.all(promises)
+
     console.log('solution', solution.getTrueVars())
 
     // console.log('level map', this.levelMap)
@@ -286,7 +316,7 @@ export default class PackageConstraintResolver {
 
 
 
-    return maxSol
+    return truthy
   }
 
   // 5. Weight the solutions. in a dependency graph, at each level, are more important
