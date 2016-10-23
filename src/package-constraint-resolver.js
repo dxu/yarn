@@ -169,6 +169,8 @@ export default class PackageConstraintResolver {
 
    */
 
+  // TODO: rename all the "terms" they don't actually refer to the correct thing
+  //
   // first call of all top level dependencies. We have to differentiate these
   // packages because theY MUST be required
   solve(topLevelDependencies): void {
@@ -195,7 +197,7 @@ export default class PackageConstraintResolver {
     // finished everything
     console.log('finished solving dependency solutions')
 
-    console.log('level map', this.levelMap)
+    // console.log('level map', this.levelMap)
 
     const solutions = []
     let curSol
@@ -204,18 +206,41 @@ export default class PackageConstraintResolver {
       solutions.push(curSol.getTrueVars());
       this.logicSolver.forbid(curSol.getFormula()); // forbid the current solution
     }
+    console.log('solutions', solutions)
 
-    // for every solution, get the weight, and then
-    console.log(solutions)
+    let maxSol
+    let maxWeight = -Infinity
+    // for every solution, return the totalWeight
+    const weights = solutions.map((sol) => {
+      const totalWeight = sol.reduce((memo, term) => {
+        return memo + this.getWeight(term)
+      }, 0)
+      if (totalWeight > maxWeight) {
+        maxSol = sol
+        maxWeight = totalWeight
+      }
+      // console.log('weight: ', totalWeight)
+    })
+    console.log('this is the max', maxSol)
+
+    return maxSol
   }
 
-  // given a pattern, calculate the relative weight of the package version.
-  // Heuristics:
-  // If it's a top level dependency, then weight is ratio * 1000, for
-  // for every level you go down, divide by 100
-  //
-  getWeight(pattern) {
-
+  // 5. Weight the solutions. in a dependency graph, at each level, are more important
+  //    than the packages below them (top level packages are most important. After that,
+  //    every package that is more recent will be higher priority. It can just be
+  //    simply calculated (for now) as a straight ratio of current package # / total # of pacakges
+  //      - do something for 2 package versions?
+  //      - maybe instead of the raito, just do a strict subtraction of weight - but then how do you handle negatives? maybe max ?
+  //    For each package version pattern:
+  //    a. For each level, weight it according to (100 ^ -(level-1)) * (current package number) / (total packages)
+  getWeight(term) {
+    // console.log('term', term)
+    const [name, ver] = this._parseLogicTerm(term)
+    const level = this.levelMap[name]
+    const versions = Object.keys(this.packageMetadata[name].versions)
+    const versionRecency = (versions.indexOf(ver) + 1) / versions.length
+    return Math.pow(1000, -(level - 1)) * versionRecency
   }
 
 
