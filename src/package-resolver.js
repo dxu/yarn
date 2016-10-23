@@ -415,7 +415,13 @@ export default class PackageResolver {
       req.visibility = parentRequest.visibility;
     }
 
-    return await this.constraintResolver.addPackage(req)
+    if (this.flat) {
+      return await this.constraintResolver.addPackage(req)
+    } else {
+      const request = new PackageRequest(req, this);
+      await request.find();
+    }
+
   }
 
   /**
@@ -437,7 +443,9 @@ export default class PackageResolver {
 
 
     // now that you have all the metadata, you can run the constraint solver
-    this.constraintResolver.solve(this.seedPatterns)
+    if (this.flat) {
+      this.constraintResolver.solve(this.seedPatterns)
+    }
 
     // after you've solved, you have a set of solutions. you can now just run
 
