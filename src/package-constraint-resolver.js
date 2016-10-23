@@ -58,6 +58,9 @@ import {USED as USED_VISIBILITY, default as PackageReference} from './package-re
 // version in the versions passed that satisfies the input range. This vastly reduces
 // the complexity and is very efficient for package resolution.
 
+
+
+// TODO change {} to use the map() for iterator support
 export default class PackageConstraintResolver {
   constructor(config: Config, reporter: Reporter, resolver: PackageResolver) {
     this.reporter = reporter;
@@ -67,7 +70,22 @@ export default class PackageConstraintResolver {
     // cache of all package metadata, mapped from name to manifest
     // { [name]: [[Manifest]] }
     this.packageMetadata = {}
+
+    // cache of all possible versions of a package
+    // { [name]: [...versions] }
+    this.packageVersions = {}
     this.currentlyFetching = {}
+
+    // the terms and costs that will be used by the logicSolver to minimizeWeightedSum
+    this.terms = []
+    this.costs = []
+
+    // combinations of name, package version that have been checked
+    // {
+    //   [logicTerm]: bool
+    // }
+    //
+    this.checkedTermsAndCost = {}
 
     // { [name]: [[level]] }
     // Always store the lowest level
@@ -95,7 +113,6 @@ export default class PackageConstraintResolver {
   // TODO: I think level calculations won't work.. currently a DFS, so if
   // you have redundant entries on the left branch, it's going to incorrectly
   // calculate the level
-  //
   async addPackage(req: DependencyRequestPattern) {
     const request = new PackageRequest(req, this.resolver);
 
@@ -108,6 +125,7 @@ export default class PackageConstraintResolver {
     }
 
     this.packageMetadata[info.name] = info
+    this.packageVersions[info.name] = Object.keys(info.versions)
 
     const dependenciesToFetch = []
     // create new find's for all the dependencies
@@ -169,6 +187,24 @@ export default class PackageConstraintResolver {
 
    */
 
+  // TODO: It looks like the solver isn't properly forbidding certain solutions
+  // It comes up with the following solution:
+  //[ [ '@yunxing-test/a 0.0.1', '@yunxing-test/c 0.0.2' ],
+  // [ '@yunxing-test/a 0.0.1',
+  //   '@yunxing-test/b 0.0.1',
+  //   '@yunxing-test/c 0.0.3' ],
+  // [ '@yunxing-test/a 0.0.1',
+  //   '@yunxing-test/b 0.0.1',
+  //   '@yunxing-test/c 0.0.1' ],
+  // [ '@yunxing-test/a 0.0.1',
+  //   '@yunxing-test/b 0.0.1',
+  //   '@yunxing-test/c 0.0.2' ] ]
+  //   If you notice, the last solution and first solution conflict. The last
+  //   solution is actually invalid. Seems like they add yunxing-test/b despite
+  //   there being no dependency there. Practically it might not matter if
+  //   we are using a cost minimizing function, since extra packages = more cost
+  //
+
   // TODO: rename all the "terms" they don't actually refer to the correct thing
   //
   // first call of all top level dependencies. We have to differentiate these
@@ -188,40 +224,67 @@ export default class PackageConstraintResolver {
       )
     }
 
-    // solve that shit
-    topLevelDependencies.map((pattern) => {
+    const queue = topLevelDependencies.map((pattern) => {
       const {range, name} = PackageRequest.normalizePattern(pattern);
-      this.solvePackage(1, name, range)
+      return [1, name, range]
+
     })
+
+    // solve that shit
+    // NOTE: we MUST use bfs so that we can retain level consistency when adding
+    // terms and costs, otherwise you must add terms and costs post traveral!
+    // See solvePackage()
+    //
+    while (queue.length > 0) {
+      const [level, name, range, parent] = queue.shift()
+      this.solvePackage(queue, level, name, range, parent)
+    }
+
+    // // solve that shit
+    // topLevelDependencies.map((pattern) => {
+    //   const {range, name} = PackageRequest.normalizePattern(pattern);
+    //   this.solvePackage(1, name, range)
+    // })
 
     // finished everything
     console.log('finished solving dependency solutions')
 
+
+    let solution = this.logicSolver.solve()
+
+    console.log('terms', this.terms)
+    console.log('costs', this.costs)
+
+    solution = this.logicSolver.minimizeWeightedSum(solution, this.terms, this.costs)
+    console.log('solution', solution.getTrueVars())
+
     // console.log('level map', this.levelMap)
 
-    const solutions = []
-    let curSol
-    // get all possible solutions
-    while ((curSol = this.logicSolver.solve())) {
-      solutions.push(curSol.getTrueVars());
-      this.logicSolver.forbid(curSol.getFormula()); // forbid the current solution
-    }
-    console.log('solutions', solutions)
+    // const solutions = []
+    // let curSol
+    // // get all possible solutions
+    // while ((curSol = this.logicSolver.solve())) {
+    //   solutions.push(curSol.getTrueVars());
+    //   this.logicSolver.forbid(curSol.getFormula()); // forbid the current solution
+    // }
+    // console.log('solutions', solutions)
 
-    let maxSol
-    let maxWeight = -Infinity
-    // for every solution, return the totalWeight
-    const weights = solutions.map((sol) => {
-      const totalWeight = sol.reduce((memo, term) => {
-        return memo + this.getWeight(term)
-      }, 0)
-      if (totalWeight > maxWeight) {
-        maxSol = sol
-        maxWeight = totalWeight
-      }
-      // console.log('weight: ', totalWeight)
-    })
-    console.log('this is the max', maxSol)
+//     let maxSol
+//     let maxWeight = -Infinity
+//     // for every solution, return the totalWeight
+//     const weights = solutions.map((sol) => {
+//       const totalWeight = sol.reduce((memo, term) => {
+//         return memo + this.getCost(term)
+//       }, 0)
+//       if (totalWeight > maxWeight) {
+//         maxSol = sol
+//         maxWeight = totalWeight
+//       }
+//       // console.log('weight: ', totalWeight)
+//     })
+//     console.log('this is the max', maxSol)
+
+
 
     return maxSol
   }
@@ -233,14 +296,17 @@ export default class PackageConstraintResolver {
   //      - do something for 2 package versions?
   //      - maybe instead of the raito, just do a strict subtraction of weight - but then how do you handle negatives? maybe max ?
   //    For each package version pattern:
-  //    a. For each level, weight it according to (100 ^ -(level-1)) * (current package number) / (total packages)
-  getWeight(term) {
-    // console.log('term', term)
-    const [name, ver] = this._parseLogicTerm(term)
+  //
+  //
+  // For each level, weight it according to (1000 ^ level) + (versionRecency) * 10,
+  // where versionRecency = totalVersionCount - lastIndexOf(version)
+  // The numbers 1000 and 10 are arbitrarily chosen and should be tweaked.
+  getCost(name, ver) {
     const level = this.levelMap[name]
-    const versions = Object.keys(this.packageMetadata[name].versions)
-    const versionRecency = (versions.indexOf(ver) + 1) / versions.length
-    return Math.pow(1000, -(level - 1)) * versionRecency
+    const versions = this.packageVersions[name]
+    const versionRecency = versions.length - (versions.lastIndexOf(ver) + 1)
+
+    return Math.pow(1000, level+1) + versionRecency
   }
 
 
@@ -249,9 +315,12 @@ export default class PackageConstraintResolver {
   // add an implies relationship from the parent to the child, because if the parent is true, then the child must be true
   //
   // Update the dependency graph with the packages, so that we can use it to calculate relative weights of each package.
-  solvePackage(level: number, name:string, currentVersionRange, parent: string): void {
-    // update the level map for the package if it hasn't been stored yet
-    this.levelMap[name] = Math.min(level, this.levelMap[name] || Infinity)
+  solvePackage(queue: Array, level: number, name:string, currentVersionRange, parent: string): void {
+    // update the level map for the package. Since it's a BFS, it will always
+    // have the minimum level value
+    this.levelMap[name] = this.levelMap[name] || level
+    console.log('name', name, this.levelMap[name])
+
 
       // metadata
     const pkg = this.packageMetadata[name]
@@ -263,11 +332,13 @@ export default class PackageConstraintResolver {
     // string of the form XXXX.XXXX.XXXX where X is a digit from 0-9
     let explicitSemverRegex = /^[0-9]+\.[0-9]+.[0-9]+$/
     if (currentVersionRange.match(explicitSemverRegex)) {
+
       // currentVersionRange is an explicit semver
       if (parent != null) {
         // if it is NOT a tld, if the parent is true, then this will be true
         this.logicSolver.require(
-          Logic.implies(parent, this._createLogicTerm(pkg.name, currentVersionRange))
+          Logic.implies(parent,
+            this._createLogicTerm(pkg.name, currentVersionRange))
         )
       } else {
         // this is an explicit TLD. you'll need to require it.
@@ -308,21 +379,31 @@ export default class PackageConstraintResolver {
 
     }
 
+
+
     // for every valid, you must go through all valid versions.
     // for every valid version, solvePackage on every dependency with
     // this as the parent package.
     // console.log('valid: ', valid)
     valid.map((currentVersion) => {
+      // save the cost and term for every valid package that exists
+      const logicTerm = this._createLogicTerm(pkg.name, currentVersion)
+      if (!this.checkedTermsAndCost[logicTerm]) {
+        this.terms.push(logicTerm)
+        this.costs.push(this.getCost(pkg.name, currentVersion))
+      }
+      this.checkedTermsAndCost[logicTerm] = true
+
+
       // grab the version and add dependencies
       const pkgInfo = pkg.versions[currentVersion]
 
       const dependencies = pkgInfo.dependencies
 
       for (const depName in dependencies) {
-        this.solvePackage(level + 1, depName, dependencies[depName], this._createLogicTerm(pkg.name, currentVersion))
+        queue.push([level + 1, depName, dependencies[depName], logicTerm])
       }
 
     })
-
   }
 }
