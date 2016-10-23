@@ -374,6 +374,7 @@ export class Install {
 
   async flatten(patterns: Array<string>): Promise<Array<string>> {
     if (!this.flags.flat) {
+      console.log('these are the patterns', patterns)
       return patterns;
     }
 
