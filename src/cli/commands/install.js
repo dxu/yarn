@@ -300,6 +300,7 @@ export class Install {
       this.reporter.step(curr, total, this.reporter.lang('resolvingPackages'), emoji.get('mag'));
       let pt = await this.resolver.init(depRequests, this.flags.flat);
       patterns = await this.flatten2(pt);
+      patterns = pt;
     });
 
     steps.push(async (curr: number, total: number) => {
@@ -383,8 +384,8 @@ export class Install {
       console.log('normalizing', pattern)
       const {range: version, name} = PackageRequest.normalizePattern(pattern);
       console.log('normalized', name, version)
-      const infos = this.resolver.getAllInfoForPackageName(name)
-      console.log('infos', infos)
+      // const infos = this.resolver.getAllInfoForPackageName(name)
+      // console.log('infos', infos)
       return this.resolver.collapseAllVersionsOfPackage(name, version);
     })
   }

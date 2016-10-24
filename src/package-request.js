@@ -120,7 +120,7 @@ export default class PackageRequest {
       return data;
     }
 
-    const Resolver = PackageRequest.getRegistryResolver(this.registry);
+    const Resolver = this.getRegistryResolver();
     const resolver = new Resolver(this, name, range);
     return resolver.resolve();
   }
@@ -129,8 +129,8 @@ export default class PackageRequest {
    * Get the registry resolver associated with this package request.
    */
 
-  static getRegistryResolver(registry ): Function {
-    const Resolver = registryResolvers[registry];
+  getRegistryResolver(): Function {
+    const Resolver = registryResolvers[this.registry];
     if (Resolver) {
       return Resolver;
     } else {
@@ -205,25 +205,45 @@ export default class PackageRequest {
 
   // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
   // Delegates to the appropriate registry resolver
-  static async getPackageMetadata(config: Config, name: string, registry): Promise<?Manifest> {
-    const Resolver = PackageRequest.getRegistryResolver(registry);
+  async getPackageMetadata(): Promise<?Manifest> {
+    const {range, name} = PackageRequest.normalizePattern(this.pattern)
+    const Resolver = this.getRegistryResolver();
     // TODO: need to implement getPackageMetadata on all resolvers
-    return await Resolver.getPackageMetadata(config, name);
+    return await Resolver.getPackageMetadata(this.config, name);
+  }
+
+  // For use in flatten, because the package metadata is fetched first,
+  // before the version is determined
+  updatePattern(pattern: string): void {
+    this.pattern = pattern
   }
 
   // what you should use after getPackageMetadata
-  async getVersionInfo() {
+  async setupPackageReferences(): Promise<?Manifest> {
+    // find version info for this package pattern
+    const info: ?Manifest = await this.findVersionInfo();
+
+    console.log('woeifjoiweeeej ')
     if (info.flat && !this.resolver.flat) {
       throw new MessageError(this.reporter.lang('flatGlobalError'));
     }
+    console.log('ojj ')
 
-    console.log('hit here')
+    // console.log('hit here')
     // validate version info
     PackageRequest.validateVersionInfo(info, this.reporter);
-    console.log('hit here')
+    //
+    const remote = info._remote;
+    invariant(remote, 'Missing remote');
 
+    // console.log('hit here')
+    // TODO: errors are being swallowed up here!
+
+    console.log('woeifjoij ')
+    console.log('woeifjoij22 ', remote, 'test')
     // set package reference
     const ref = new PackageReference(this, info, remote);
+    console.log('shuld her ')
     ref.addPattern(this.pattern, info);
     ref.addOptional(this.optional);
     ref.addVisibility(this.visibility);

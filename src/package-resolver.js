@@ -119,6 +119,7 @@ export default class PackageResolver {
    */
 
   dedupePatterns(patterns: Iterable<string>): Array<string> {
+    console.log('hiitting', patterns, this.patternsByPackage)
     const deduped = [];
     const seen = new Set();
 
@@ -217,6 +218,7 @@ export default class PackageResolver {
   getAllInfoForPackageName(name: string): Array<Manifest> {
     const infos = [];
     const seen = new Set();
+    console.log('test', name, this.patternsByPackage[name])
 
     for (const pattern of this.patternsByPackage[name]) {
       const info = this.patterns[pattern];
@@ -274,6 +276,7 @@ export default class PackageResolver {
    */
 
   collapseAllVersionsOfPackage(name: string, version: string): string {
+    console.log('testting', name, version)
     const patterns = this.dedupePatterns(this.patternsByPackage[name]);
     const human = `${name}@${version}`;
 
@@ -364,6 +367,7 @@ export default class PackageResolver {
    */
 
   getStrictResolvedPattern(pattern: string): Manifest {
+    console.log(pattern)
     const manifest = this.getResolvedPattern(pattern);
     invariant(manifest, 'expected manifest');
     return manifest;
@@ -445,7 +449,7 @@ export default class PackageResolver {
 
     // now that you have all the metadata, you can run the constraint solver
     if (this.flat) {
-      solution = this.constraintResolver.solve(this.seedPatterns)
+      solution = await this.constraintResolver.solve(this.seedPatterns)
       console.log('soluion', solution)
     }
 
