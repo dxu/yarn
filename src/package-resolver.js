@@ -119,7 +119,7 @@ export default class PackageResolver {
    */
 
   dedupePatterns(patterns: Iterable<string>): Array<string> {
-    console.log('hiitting', patterns, this.patternsByPackage)
+    // console.log('hiitting', patterns, this.patternsByPackage)
     const deduped = [];
     const seen = new Set();
 
@@ -450,7 +450,7 @@ export default class PackageResolver {
     // now that you have all the metadata, you can run the constraint solver
     if (this.flat) {
       solution = await this.constraintResolver.solve(this.seedPatterns)
-      console.log('soluion', solution)
+      // console.log('soluion', solution)
     }
 
     activity.end();

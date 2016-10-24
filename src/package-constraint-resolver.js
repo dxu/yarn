@@ -14,52 +14,6 @@ import Logic from 'logic-solver'
 
 import {USED as USED_VISIBILITY, default as PackageReference} from './package-reference.js';
 
-// a node in the package dependency graph. Used for calculating weights.
-// It is version agnostic. For each package node, it will contain (as children) all
-// dependencies for all versions.
-// Redundancies should be flattened - If there exists a package already, then
-// you should just store it at the higher node
-// class DepGraphNode {
-//   constructor(name='$root', parent, level=0) {
-//     this.name = name
-//     this.version = version
-//     this.level = level
-//     this.parent = parent
-//   }
-// }
-
-
-// Overall algorithm:
-// 1. Get all package metadata.
-// 2. While grabbing the package metadata, create the dependency graph
-// 3. set up constraints while traversing the graph
-// 4. have a depGraphMap mapping from package name to the dependency graph
-//    node for easy access
-// 5. Weight the solutions. in a dependency graph, at each level, are more important
-//    than the packages below them (top level packages are most important. After that,
-//    every package that is more recent will be higher priority. It can just be
-//    simply calculated (for now) as a straight ratio of current package # / total # of pacakges
-//      - do something for 2 package versions?
-//      - maybe instead of the raito, just do a strict subtraction of weight - but then how do you handle negatives? maybe max ?
-//    For each package version pattern:
-//    a. For each level, weight it according to (100 ^ -(level-1)) * (current package number) / (total packages)
-//
-//
-// Problem: We are currently collecting a flat array of all the packages, and just fetching metadata. with redundancies,
-//          there will be no way to differentiate a package A at level 2, that gets re-required at level 4. Level 4 package dependencies will then be determined to be level 3, even though they should be level 5
-//
-//
-// Alternative algorithm
-// Calculate the level on addPackage, and just store them as a flat map of objects. You can calculate the level by
-// continually looking for req.parentRequest() until you reach undefined
-
-
-// This isn't really a "proper" constraint resolver. We just return the highest semver
-// version in the versions passed that satisfies the input range. This vastly reduces
-// the complexity and is very efficient for package resolution.
-
-
-
 // TODO change {} to use the map() for iterator support
 export default class PackageConstraintResolver {
   constructor(config: Config, reporter: Reporter, resolver: PackageResolver) {
@@ -83,6 +37,10 @@ export default class PackageConstraintResolver {
     this.terms = []
     this.costs = []
 
+    // visited logic terms
+    this.visited = []
+
+    this.unrecognizedPatterns = []
     // combinations of name, package version that have been checked
     // {
     //   [logicTerm]: bool
@@ -112,30 +70,42 @@ export default class PackageConstraintResolver {
   // ALl this method is used for currently is for fetching all package metadata
   // It is called in the pipeline in place of Package Request's findVersionInfo
   // so that we can retain the package metadata
-  //
-  // TODO: I think level calculations won't work.. currently a DFS, so if
-  // you have redundant entries on the left branch, it's going to incorrectly
-  // calculate the level
   async addPackage(req: DependencyRequestPattern) {
     const {range, name} = PackageRequest.normalizePattern(req.pattern);
 
     const request = new PackageRequest(req, this.resolver);
+
+    // if we don't have the package
+
+    // find the version info
+    let info: ?Manifest =
+      await request.getPackageMetadata();
+
+    if (!info) {
+      console.log('failed to fetch, quitting ', req.pattern, info)
+
+      // if (req.pattern.indexOf('ignore-rules') > 0 || req.pattern.indexOf('miniglob') > 0) {
+      //   throw new Error()
+      // }
+
+      // The package can no longer be found. Because this algorithm runs
+      // through ALL possible packages and dependencies, this will happen often with
+      // very old packages that got unpublished.
+      // console.log('this is the error', req.pattern)
+      // TODO: Should we prompt the user that there were unrecognized packages?
+      this.unrecognizedPatterns.push(req.pattern)
+      // throw new MessageError(this.reporter.lang('unknownPackage', req.pattern));
+      return
+    }
 
     // cache the PackageRequests for now. After we run
     // logicSolver.solve(), we will use them to update the references for a
     // specific version.
     this.packageRequests[name] = request
 
-    // find the version info
-    const info: ?Manifest =
-      await request.getPackageMetadata();
-
-    if (!info) {
-      throw new MessageError(this.reporter.lang('unknownPackage', req.pattern));
-    }
-
-    this.packageMetadata[info.name] = info
-    this.packageVersions[info.name] = Object.keys(info.versions)
+    this.packageMetadata[name] = info
+    this.packageVersions[name] = Object.keys(info.versions)
+    // console.log('ff', this.packageVersions)
 
     const dependenciesToFetch = []
     // create new find's for all the dependencies
@@ -222,8 +192,8 @@ export default class PackageConstraintResolver {
   // first call of all top level dependencies. We have to differentiate these
   // packages because theY MUST be required
   async solve(topLevelDependencies): void {
-    // before you do anything, add atMostOne to all the packages currently
-    // stored in the packageMetadata.
+    // before you do anything, add atMostOne version to all the packages
+    // currently stored in the packageMetadata.
     for (let name in this.packageMetadata) {
       const pkg = this.packageMetadata[name]
       // store the version information for finding all valid package versions for
@@ -237,9 +207,31 @@ export default class PackageConstraintResolver {
     }
 
     const queue = topLevelDependencies.map((pattern) => {
+      // for every package in the topleveldependencies, require that
+      // exactly one of the valid versions exists
       const {range, name} = PackageRequest.normalizePattern(pattern);
-      return [1, name, range]
+      // let valid = []
+      // let pkg = this.packageMetadata[name]
 
+      // valid = Object.keys(pkg.versions).
+      //   filter((ver) => {
+      //     return semver.satisfies(ver, currentVersionRange)
+      //   })
+
+
+      // // for every valid version of this package, exactly one package exists
+      // // for a solution to work
+      // this.logicSolver.require(
+      //   Logic.exactlyOne(
+      //     ...valid.map(ver => this._createLogicTerm(pkg.name, ver))
+      //   )
+      // )
+
+      // for every dependency in this package's list of dependencies, you must
+      // call
+
+
+      return [1, name, range]
     })
 
     // solve that shit
@@ -261,15 +253,28 @@ export default class PackageConstraintResolver {
     // finished everything
     console.log('finished solving dependency solutions')
 
+    // console.log('stuff', Object.keys(this.packageMetadata))
+    // console.log(this.packageVersions)
+    // console.log('stuff', this.packageMetadata['chai'].versions['3.5.0'])
 
     let solution = this.logicSolver.solve()
 
-    console.log('terms', this.terms)
-    console.log('costs', this.costs)
+    console.log('terms', this.terms.length)
+    console.log('costs', this.costs.length)
+    console.log('solution', solution)
+
+    // if the solution is null, there is no valid solution!
+    if (solution == null) {
+      // TODO: handle this better
+      throw new Error('no solution was found')
+    }
+    console.log('first solution', solution.getTrueVars())
+
 
     solution = this.logicSolver.minimizeWeightedSum(solution, this.terms, this.costs)
     const truthy = solution.getTrueVars()
 
+    console.log('truthy weight', truthy)
 
     let promises = []
 
@@ -286,7 +291,6 @@ export default class PackageConstraintResolver {
 
     await Promise.all(promises)
 
-    console.log('solution', solution.getTrueVars())
 
     // console.log('level map', this.levelMap)
 
@@ -336,7 +340,7 @@ export default class PackageConstraintResolver {
     const versions = this.packageVersions[name]
     const versionRecency = versions.length - (versions.lastIndexOf(ver) + 1)
 
-    return Math.pow(1000, level+1) + versionRecency
+    return Math.pow(10, level+1) + versionRecency
   }
 
 
@@ -349,31 +353,52 @@ export default class PackageConstraintResolver {
     // update the level map for the package. Since it's a BFS, it will always
     // have the minimum level value
     this.levelMap[name] = this.levelMap[name] || level
-    console.log('name', name, this.levelMap[name])
+    // console.log('name', name, this.levelMap[name], this.packageMetadata[name])
 
 
-      // metadata
     const pkg = this.packageMetadata[name]
+    console.log('this.package', this.packageMetadata[name])
+    console.log('this.package', name)
+    // if we don't have the metadata, immediately return because that means it
+    // was unrecognized during the metadata extraction process.
+    // TODO: better error checking
+    if (pkg == null) {
+      if (parent == null) {
+        throw new Error("There was an invalid package included as a TLD")
+      }
+      // we can immediately forbid anything that depends on this package
+      // (the parent), because we don't have metadata for it!
+      // this.logicSolver.forbid(parent)
+      return
+    }
 
     // all possible valid versions of this package given the range
     let valid = []
 
+    const negatedParent = `-${parent}`
+
     // TODO: make check more robust
     // string of the form XXXX.XXXX.XXXX where X is a digit from 0-9
     let explicitSemverRegex = /^[0-9]+\.[0-9]+.[0-9]+$/
+    // currentVersionRange is not a semver range, just a single version
     if (currentVersionRange.match(explicitSemverRegex)) {
 
-      // currentVersionRange is an explicit semver
       if (parent != null) {
+        const logicTerm = this._createLogicTerm(pkg.name, currentVersionRange)
+        const negatedLogicTerm = `-${logicTerm}`;
         // if it is NOT a tld, if the parent is true, then this will be true
         this.logicSolver.require(
-          Logic.implies(parent,
-            this._createLogicTerm(pkg.name, currentVersionRange))
+          Logic.implies(parent, logicTerm)
         )
+        // if the dependency is false, then the parent is false.
+        // this.logicSolver.require(
+        //   Logic.implies(negatedLogicTerm, negatedParent)
+        // )
+
       } else {
         // this is an explicit TLD. you'll need to require it.
         this.logicSolver.require(
-          Logic.and(this._createLogicTerm(pkg.name, currentVersionRange))
+          this._createLogicTerm(pkg.name, currentVersionRange)
         )
       }
       // console.log('requiring ', `${pkg.name} ${currentVersionRange}`)
@@ -387,27 +412,46 @@ export default class PackageConstraintResolver {
           return semver.satisfies(ver, currentVersionRange)
         })
 
-      // if it's not a TLD, the parent being true implies that
-      // exactly one here is true
+      const validLogicTerms =
+        valid.map(ver => this._createLogicTerm(pkg.name, ver))
+      const negatedValidLogicTerms =
+        validLogicTerms.map(ver => `-${ver}`)
       if (parent != null) {
+        // if it's not a TLD, the parent being true implies that
+        // exactly one here is true
         this.logicSolver.require(
           Logic.implies(
             parent,
             Logic.exactlyOne(
-              ...valid.map(ver => this._createLogicTerm(pkg.name, ver))
+              ...validLogicTerms
             )
           )
-        )
+        );
+        // if all of the valid logic terms are negated (i.e, they are false),
+        // then it implies that the parent is false
+        // this.logicSolver.require(
+        //   Logic.implies(
+        //     Logic.or(
+        //       ...negatedValidLogicTerms,
+        //     ),
+        //     negatedParent,
+        //   )
+        // );
       } else {
         // if it's a TLD, exactly one is definitely true.
         this.logicSolver.require(
           Logic.exactlyOne(
-            ...valid.map(ver => this._createLogicTerm(pkg.name, ver))
+            ...validLogicTerms
           )
         )
       }
-
     }
+
+    // filter out the versions we've already visited
+    valid = valid.filter((version) => {
+      const logicTerm = this._createLogicTerm(pkg.name, version)
+      return this.visited[logicTerm] == null
+    })
 
 
 
@@ -418,6 +462,7 @@ export default class PackageConstraintResolver {
     valid.map((currentVersion) => {
       // save the cost and term for every valid package that exists
       const logicTerm = this._createLogicTerm(pkg.name, currentVersion)
+
       if (!this.checkedTermsAndCost[logicTerm]) {
         this.terms.push(logicTerm)
         this.costs.push(this.getCost(pkg.name, currentVersion))
@@ -425,6 +470,7 @@ export default class PackageConstraintResolver {
       this.checkedTermsAndCost[logicTerm] = true
 
 
+      console.log('current', pkg.name, currentVersion)
       // grab the version and add dependencies
       const pkgInfo = pkg.versions[currentVersion]
 
@@ -434,6 +480,8 @@ export default class PackageConstraintResolver {
         queue.push([level + 1, depName, dependencies[depName], logicTerm])
       }
 
+      // mark that we've visited this
+      this.visited[logicTerm] = true
     })
   }
 }

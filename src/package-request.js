@@ -185,6 +185,7 @@ export default class PackageRequest {
 
   findExoticVersionInfo(ExoticResolver: Function, range: string): Promise<Manifest> {
     const resolver = new ExoticResolver(this, range);
+    console.log('inside ')
     return resolver.resolve();
   }
 
@@ -203,13 +204,40 @@ export default class PackageRequest {
   }
 
 
+  // adds some basic information necessary for the package extraction
+  normalizePackageMetadata(name, body) {
+    const metadata = {name}
+    metadata.versions = {[body.version]: body};
+    return metadata
+  }
+
   // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
   // Delegates to the appropriate registry resolver
   async getPackageMetadata(): Promise<?Manifest> {
+    // console.log('hit here first', this.pattern)
     const {range, name} = PackageRequest.normalizePattern(this.pattern)
-    const Resolver = this.getRegistryResolver();
-    // TODO: need to implement getPackageMetadata on all resolvers
-    return await Resolver.getPackageMetadata(this.config, name);
+
+    const ExoticResolver = PackageRequest.getExoticResolver(range);
+    console.log('hittingajj', name, range)
+    if (ExoticResolver) {
+      // const resolver = new ExoticResolver(this, this.pattern);
+      // We should be able to just use findExoticVersionInfo, because
+      // there should be no "ranges" of versions.
+      // console.log('hitting')
+      const body = await this.findExoticVersionInfo(ExoticResolver, range);
+      // normalize the metadata for dependencies
+      console.log('got the body', body)
+      // throw new Error()
+      // console.log('url to fetch the metadata', `${body._remote.reference}#${body._remote.hash}`)
+      // throw new Error()
+      return this.normalizePackageMetadata(name, body)
+    } else {
+      // console.log('hit here')
+      const Resolver = this.getRegistryResolver();
+      // console.log(Resolver)
+      // TODO: need to implement getPackageMetadata on all resolvers
+      return await Resolver.getPackageMetadata(this.config, name);
+    }
   }
 
   // For use in flatten, because the package metadata is fetched first,
