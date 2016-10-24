@@ -117,8 +117,13 @@ export default class PackageConstraintResolver {
     const request = new PackageRequest(req, this.resolver);
 
     // find the version info
-
-    const info: ?Manifest = await request.getPackageMetadata();
+    const {range, name} = PackageRequest.normalizePattern(req.pattern);
+    const info: ?Manifest =
+      await PackageRequest.getPackageMetadata(
+        this.config,
+        name,
+        req.registry,
+      );
 
     if (!info) {
       throw new MessageError(this.reporter.lang('unknownPackage', req.pattern));
@@ -156,13 +161,15 @@ export default class PackageConstraintResolver {
 
   // given a package name and a version, create a logic term
   _createLogicTerm(name, ver) {
-    return `${name} ${ver}`
+    // TODO: see if there is an existing method for this
+    return `${name}@${ver}`
   }
 
   // given a logic term, generate the package name and version it represents
   // in the form [name, version]
   _parseLogicTerm(term) {
-    return term.split(' ')
+    const {range, name} = PackageRequest.normalizePattern(pattern);
+    return [name, range]
   }
 
 
@@ -286,7 +293,7 @@ export default class PackageConstraintResolver {
 
 
 
-    return maxSol
+    return solution.getTrueVars()
   }
 
   // 5. Weight the solutions. in a dependency graph, at each level, are more important

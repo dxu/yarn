@@ -120,7 +120,7 @@ export default class PackageRequest {
       return data;
     }
 
-    const Resolver = this.getRegistryResolver();
+    const Resolver = PackageRequest.getRegistryResolver(this.registry);
     const resolver = new Resolver(this, name, range);
     return resolver.resolve();
   }
@@ -129,8 +129,8 @@ export default class PackageRequest {
    * Get the registry resolver associated with this package request.
    */
 
-  getRegistryResolver(): Function {
-    const Resolver = registryResolvers[this.registry];
+  static getRegistryResolver(registry ): Function {
+    const Resolver = registryResolvers[registry];
     if (Resolver) {
       return Resolver;
     } else {
@@ -203,11 +203,51 @@ export default class PackageRequest {
   }
 
 
-  // gets all package metadata from https://registry.yarnpkg.com/<package>
-  async getPackageMetadata(): Promise<?Manifest> {
-    const {range, name} = PackageRequest.normalizePattern(this.pattern);
-    // hardcode npm resolver for now
-    return NpmResolver.getPackageMetadata(this.config, name);
+  // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
+  // Delegates to the appropriate registry resolver
+  static async getPackageMetadata(config: Config, name: string, registry): Promise<?Manifest> {
+    const Resolver = PackageRequest.getRegistryResolver(registry);
+    // TODO: need to implement getPackageMetadata on all resolvers
+    return await Resolver.getPackageMetadata(config, name);
+  }
+
+  // what you should use after getPackageMetadata
+  async getVersionInfo() {
+    if (info.flat && !this.resolver.flat) {
+      throw new MessageError(this.reporter.lang('flatGlobalError'));
+    }
+
+    console.log('hit here')
+    // validate version info
+    PackageRequest.validateVersionInfo(info, this.reporter);
+    console.log('hit here')
+
+    // set package reference
+    const ref = new PackageReference(this, info, remote);
+    ref.addPattern(this.pattern, info);
+    ref.addOptional(this.optional);
+    ref.addVisibility(this.visibility);
+    info._reference = ref;
+    info._remote = remote;
+
+    // start installation of dependencies
+    const deps = [];
+
+    // normal deps
+    for (const depName in info.dependencies) {
+      const depPattern = depName + '@' + info.dependencies[depName];
+      deps.push(depPattern);
+    }
+
+    // optional deps
+    for (const depName in info.optionalDependencies) {
+      const depPattern = depName + '@' + info.optionalDependencies[depName];
+      deps.push(depPattern);
+    }
+
+    ref.addDependencies(deps);
+
+    return info
   }
 
   /**

@@ -298,8 +298,8 @@ export class Install {
 
     steps.push(async (curr: number, total: number) => {
       this.reporter.step(curr, total, this.reporter.lang('resolvingPackages'), emoji.get('mag'));
-      await this.resolver.init(depRequests, this.flags.flat);
-      patterns = await this.flatten(rawPatterns);
+      let pt = await this.resolver.init(depRequests, this.flags.flat);
+      patterns = await this.flatten2(pt);
     });
 
     steps.push(async (curr: number, total: number) => {
@@ -366,6 +366,27 @@ export class Install {
 
   shouldClean(): Promise<boolean> {
     return fs.exists(path.join(this.config.cwd, constants.CLEAN_FILENAME));
+  }
+
+
+
+  /*
+   *
+   */
+  async flatten2(patterns: Array<string>): Promise<Array<string>> {
+    console.log('these are the patterns', patterns)
+    if (!this.flags.flat) {
+      return patterns;
+    }
+    //
+    patterns.map((pattern) => {
+      console.log('normalizing', pattern)
+      const {range: version, name} = PackageRequest.normalizePattern(pattern);
+      console.log('normalized', name, version)
+      const infos = this.resolver.getAllInfoForPackageName(name)
+      console.log('infos', infos)
+      return this.resolver.collapseAllVersionsOfPackage(name, version);
+    })
   }
 
   /**

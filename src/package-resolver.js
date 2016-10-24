@@ -441,15 +441,18 @@ export default class PackageResolver {
     await Promise.all(deps.map((req): Promise<void> => this.find(req)));
     // console.log("finished all", this.constraintResolver.packageMetadata)
 
+    let solution
 
     // now that you have all the metadata, you can run the constraint solver
     if (this.flat) {
-      this.constraintResolver.solve(this.seedPatterns)
+      solution = this.constraintResolver.solve(this.seedPatterns)
+      console.log('soluion', solution)
     }
-
-    // after you've solved, you have a set of solutions. you can now just run
 
     activity.end();
     this.activity = null;
+
+    // TODO: clean up
+    return solution
   }
 }
