@@ -126,10 +126,21 @@ export default class PackageConstraintResolver {
     const request = new PackageRequest(req, this.resolver);
 
     // find the version info
-    const info: ?Manifest =
+    let info: ?Manifest
+    try {
+     info =
       await request.getPackageMetadata();
 
+    } catch(e) {
+      console.log('errored out', e)
+    }
+
     if (!info) {
+      console.log('failed to fetch, quitting ', req.pattern, info)
+
+      if (req.pattern.indexOf('ignore-rules') > 0 || req.pattern.indexOf('miniglob') > 0) {
+        throw new Error()
+      }
       // The package can no longer be found. Because this algorithm runs
       // through ALL possible packages and dependencies, this can happen with
       // very old packages that got unpublished.

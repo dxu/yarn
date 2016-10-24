@@ -52,6 +52,7 @@ export default class NpmRegistry extends Registry {
   request(pathname: string, opts?: RegistryRequestOptions = {}): Promise<*> {
     const registry = addSuffix(this.getRegistry(pathname), '/');
     const requestUrl = url.resolve(registry, pathname);
+    // console.log('requesting for the metadata at: ', requestUrl)
     const alwaysAuth = this.getScopedOption(registry.replace(/^https?:/, ''), 'always-auth')
       || this.getOption('always-auth')
       || removePrefix(requestUrl, registry)[0] === '@';
@@ -61,6 +62,9 @@ export default class NpmRegistry extends Registry {
       headers.authorization = this.getAuth(pathname);
     }
 
+    if (pathname.indexOf('ignore-rules') > 0 || pathname.indexOf('miniglob') > 0) {
+      console.log('requesting for the metadata inside: ', pathname, requestUrl)
+    }
     return this.requestManager.request({
       url: requestUrl,
       method: opts.method,

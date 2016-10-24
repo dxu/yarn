@@ -206,7 +206,9 @@ export default class PackageRequest {
   // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
   // Delegates to the appropriate registry resolver
   async getPackageMetadata(): Promise<?Manifest> {
+    // console.log('hit here first', this.pattern)
     const {range, name} = PackageRequest.normalizePattern(this.pattern)
+    // console.log('hit here')
     const Resolver = this.getRegistryResolver();
     // console.log(Resolver)
     // TODO: need to implement getPackageMetadata on all resolvers
