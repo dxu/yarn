@@ -208,6 +208,7 @@ export default class PackageRequest {
   async getPackageMetadata(): Promise<?Manifest> {
     const {range, name} = PackageRequest.normalizePattern(this.pattern)
     const Resolver = this.getRegistryResolver();
+    // console.log(Resolver)
     // TODO: need to implement getPackageMetadata on all resolvers
     return await Resolver.getPackageMetadata(this.config, name);
   }

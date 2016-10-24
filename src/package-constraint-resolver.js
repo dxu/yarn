@@ -83,6 +83,10 @@ export default class PackageConstraintResolver {
     this.terms = []
     this.costs = []
 
+    // visited logic terms
+    this.visited = []
+
+    this.unrecognizedPatterns = []
     // combinations of name, package version that have been checked
     // {
     //   [logicTerm]: bool
@@ -121,18 +125,25 @@ export default class PackageConstraintResolver {
 
     const request = new PackageRequest(req, this.resolver);
 
-    // cache the PackageRequests for now. After we run
-    // logicSolver.solve(), we will use them to update the references for a
-    // specific version.
-    this.packageRequests[name] = request
-
     // find the version info
     const info: ?Manifest =
       await request.getPackageMetadata();
 
     if (!info) {
-      throw new MessageError(this.reporter.lang('unknownPackage', req.pattern));
+      // The package can no longer be found. Because this algorithm runs
+      // through ALL possible packages and dependencies, this can happen with
+      // very old packages that got unpublished.
+      // console.log('this is the error', req.pattern)
+      // TODO: Should we prompt the user that there were unrecognized packages?
+      this.unrecognizedPatterns.push(req.pattern)
+      // throw new MessageError(this.reporter.lang('unknownPackage', req.pattern));
+      return
     }
+
+    // cache the PackageRequests for now. After we run
+    // logicSolver.solve(), we will use them to update the references for a
+    // specific version.
+    this.packageRequests[name] = request
 
     this.packageMetadata[info.name] = info
     this.packageVersions[info.name] = Object.keys(info.versions)
@@ -266,6 +277,13 @@ export default class PackageConstraintResolver {
 
     console.log('terms', this.terms)
     console.log('costs', this.costs)
+    console.log('solution', solution)
+    // TODO: if the solution is null, there is no valid solution!
+
+    if (solution == null) {
+      throw new Error('THERE WAS AN ERROR')
+    }
+
 
     solution = this.logicSolver.minimizeWeightedSum(solution, this.terms, this.costs)
     const truthy = solution.getTrueVars()
@@ -336,7 +354,7 @@ export default class PackageConstraintResolver {
     const versions = this.packageVersions[name]
     const versionRecency = versions.length - (versions.lastIndexOf(ver) + 1)
 
-    return Math.pow(1000, level+1) + versionRecency
+    return Math.pow(10, level+1) + versionRecency
   }
 
 
@@ -349,11 +367,19 @@ export default class PackageConstraintResolver {
     // update the level map for the package. Since it's a BFS, it will always
     // have the minimum level value
     this.levelMap[name] = this.levelMap[name] || level
-    console.log('name', name, this.levelMap[name])
+    // console.log('name', name, this.levelMap[name], this.packageMetadata[name])
 
 
-      // metadata
     const pkg = this.packageMetadata[name]
+    // if we don't have the metadata, immediately return because that means it
+    // was unrecognized during the metadata extraction process.
+    // TODO: better error checking
+    if (pkg == null) {
+      // we can immediately forbid anything that depends on this package
+      // (the parent), because we don't have metadata for it!
+      this.logicSolver.forbid(parent)
+      return
+    }
 
     // all possible valid versions of this package given the range
     let valid = []
@@ -409,6 +435,12 @@ export default class PackageConstraintResolver {
 
     }
 
+    // filter out the versions we've already visited
+    valid = valid.filter((version) => {
+      const logicTerm = this._createLogicTerm(pkg.name, version)
+      return this.visited[logicTerm] == null
+    })
+
 
 
     // for every valid, you must go through all valid versions.
@@ -434,6 +466,8 @@ export default class PackageConstraintResolver {
         queue.push([level + 1, depName, dependencies[depName], logicTerm])
       }
 
+      // mark that we've visited this
+      this.visited[logicTerm] = true
     })
   }
 }
