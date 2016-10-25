@@ -185,6 +185,7 @@ export default class PackageRequest {
 
   findExoticVersionInfo(ExoticResolver: Function, range: string): Promise<Manifest> {
     const resolver = new ExoticResolver(this, range);
+    console.log('inside ')
     return resolver.resolve();
   }
 
@@ -203,6 +204,15 @@ export default class PackageRequest {
   }
 
 
+  // adds some basic information necessary for the package extraction
+  normalizePackageMetadata(name, body) {
+    const metadata = {
+      name:
+    }
+    metadata.versions = {[body.version]: body};
+    return metadata
+  }
+
   // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
   // Delegates to the appropriate registry resolver
   async getPackageMetadata(): Promise<?Manifest> {
@@ -210,14 +220,19 @@ export default class PackageRequest {
     const {range, name} = PackageRequest.normalizePattern(this.pattern)
 
     const ExoticResolver = PackageRequest.getExoticResolver(range);
+    console.log('hittingajj', name, range)
     if (ExoticResolver) {
-      const resolver = new ExoticResolver(this, this.pattern);
+      // const resolver = new ExoticResolver(this, this.pattern);
       // We should be able to just use findExoticVersionInfo, because
       // there should be no "ranges" of versions.
-      const body = await this.findExoticVersionInfo(ExoticResolver, this.pattern);
+      // console.log('hitting')
+      const body = await this.findExoticVersionInfo(ExoticResolver, range);
+      // normalize the metadata for dependencies
       console.log('got the body', body)
-      throw new Erro()
-      return body
+      // throw new Error()
+      // console.log('url to fetch the metadata', `${body._remote.reference}#${body._remote.hash}`)
+      // throw new Error()
+      return this.normalizePackageMetadata(name, body)
     } else {
       // console.log('hit here')
       const Resolver = this.getRegistryResolver();

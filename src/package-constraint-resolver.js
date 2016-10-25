@@ -75,6 +75,8 @@ export default class PackageConstraintResolver {
 
     const request = new PackageRequest(req, this.resolver);
 
+    // if we don't have the package
+
     // find the version info
     let info: ?Manifest =
       await request.getPackageMetadata();
@@ -101,8 +103,9 @@ export default class PackageConstraintResolver {
     // specific version.
     this.packageRequests[name] = request
 
-    this.packageMetadata[info.name] = info
-    this.packageVersions[info.name] = Object.keys(info.versions)
+    this.packageMetadata[name] = info
+    this.packageVersions[name] = Object.keys(info.versions)
+    // console.log('ff', this.packageVersions)
 
     const dependenciesToFetch = []
     // create new find's for all the dependencies
@@ -250,7 +253,8 @@ export default class PackageConstraintResolver {
     // finished everything
     console.log('finished solving dependency solutions')
 
-    console.log('stuff', Object.keys(this.packageMetadata))
+    // console.log('stuff', Object.keys(this.packageMetadata))
+    // console.log(this.packageVersions)
     // console.log('stuff', this.packageMetadata['chai'].versions['3.5.0'])
 
     let solution = this.logicSolver.solve()
@@ -353,6 +357,8 @@ export default class PackageConstraintResolver {
 
 
     const pkg = this.packageMetadata[name]
+    console.log('this.package', this.packageMetadata[name])
+    console.log('this.package', name)
     // if we don't have the metadata, immediately return because that means it
     // was unrecognized during the metadata extraction process.
     // TODO: better error checking
