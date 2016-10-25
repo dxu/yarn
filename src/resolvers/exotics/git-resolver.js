@@ -62,6 +62,14 @@ export default class GitResolver extends ExoticResolver {
     return false;
   }
 
+  // async getPackageMetadata(): Promise<Manifest> {
+  //   const {url} = this;
+  //   console.log('url', url)
+
+  //   const parts = urlParse(url);
+
+  // }
+
   async resolve(forked?: true): Promise<Manifest> {
     const {url} = this;
 
@@ -117,6 +125,7 @@ export default class GitResolver extends ExoticResolver {
     }
 
     const file = await tryRegistry(this.registry);
+    console.log('file', file)
     if (file) {
       return file;
     }

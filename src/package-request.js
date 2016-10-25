@@ -208,11 +208,23 @@ export default class PackageRequest {
   async getPackageMetadata(): Promise<?Manifest> {
     // console.log('hit here first', this.pattern)
     const {range, name} = PackageRequest.normalizePattern(this.pattern)
-    // console.log('hit here')
-    const Resolver = this.getRegistryResolver();
-    // console.log(Resolver)
-    // TODO: need to implement getPackageMetadata on all resolvers
-    return await Resolver.getPackageMetadata(this.config, name);
+
+    const ExoticResolver = PackageRequest.getExoticResolver(range);
+    if (ExoticResolver) {
+      const resolver = new ExoticResolver(this, this.pattern);
+      // We should be able to just use findExoticVersionInfo, because
+      // there should be no "ranges" of versions.
+      const body = await this.findExoticVersionInfo(ExoticResolver, this.pattern);
+      console.log('got the body', body)
+      throw new Erro()
+      return body
+    } else {
+      // console.log('hit here')
+      const Resolver = this.getRegistryResolver();
+      // console.log(Resolver)
+      // TODO: need to implement getPackageMetadata on all resolvers
+      return await Resolver.getPackageMetadata(this.config, name);
+    }
   }
 
   // For use in flatten, because the package metadata is fetched first,
