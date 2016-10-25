@@ -40,9 +40,7 @@ export default class NpmResolver extends RegistryResolver {
   }
 
   static async getPackageMetadata(config, name): Promise<?Manifest> {
-    // console.log('testing the stuffffff', NpmRegistry.escapeName(name))
     const body = await config.registries.npm.request(NpmRegistry.escapeName(name));
-    // console.log(body)
     return body
 
   }
@@ -177,5 +175,4 @@ export default class NpmResolver extends RegistryResolver {
 
     return info;
   }
-
 }

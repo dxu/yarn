@@ -31,7 +31,6 @@ export default class Git {
     this.config = config;
     this.hash = hash;
     this.ref = hash;
-    console.log('original url', url)
     this.url = Git.cleanUrl(url);
     this.cwd = this.config.getTemp(crypto.hash(this.url));
   }
@@ -200,10 +199,8 @@ export default class Git {
 
   fetch(): Promise<void> {
     const {url, cwd} = this;
-    console.log('insid retch')
 
     return fs.lockQueue.push(url, async () => {
-      console.log('url', url)
       if (await fs.exists(cwd)) {
         await child.spawn('git', ['pull'], {cwd});
       } else {
@@ -288,7 +285,6 @@ export default class Git {
     if (await Git.hasArchiveCapability(this.url)) {
       this.supportsArchive = true;
     } else {
-      console.log('fetching')
       await this.fetch();
     }
 

@@ -185,7 +185,6 @@ export default class PackageRequest {
 
   findExoticVersionInfo(ExoticResolver: Function, range: string): Promise<Manifest> {
     const resolver = new ExoticResolver(this, range);
-    console.log('inside ')
     return resolver.resolve();
   }
 
@@ -214,27 +213,18 @@ export default class PackageRequest {
   // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
   // Delegates to the appropriate registry resolver
   async getPackageMetadata(): Promise<?Manifest> {
-    // console.log('hit here first', this.pattern)
     const {range, name} = PackageRequest.normalizePattern(this.pattern)
 
     const ExoticResolver = PackageRequest.getExoticResolver(range);
-    console.log('hittingajj', name, range)
     if (ExoticResolver) {
       // const resolver = new ExoticResolver(this, this.pattern);
       // We should be able to just use findExoticVersionInfo, because
       // there should be no "ranges" of versions.
-      // console.log('hitting')
       const body = await this.findExoticVersionInfo(ExoticResolver, range);
       // normalize the metadata for dependencies
-      console.log('got the body', body)
-      // throw new Error()
-      // console.log('url to fetch the metadata', `${body._remote.reference}#${body._remote.hash}`)
-      // throw new Error()
       return this.normalizePackageMetadata(name, body)
     } else {
-      // console.log('hit here')
       const Resolver = this.getRegistryResolver();
-      // console.log(Resolver)
       // TODO: need to implement getPackageMetadata on all resolvers
       return await Resolver.getPackageMetadata(this.config, name);
     }
@@ -246,32 +236,27 @@ export default class PackageRequest {
     this.pattern = pattern
   }
 
+  // TODO: Add the resolved field back into the package.json!!!
   // what you should use after getPackageMetadata
+  // TODO: dedupe from the method below
   async setupPackageReferences(): Promise<?Manifest> {
     // find version info for this package pattern
     const info: ?Manifest = await this.findVersionInfo();
 
-    console.log('woeifjoiweeeej ')
     if (info.flat && !this.resolver.flat) {
       throw new MessageError(this.reporter.lang('flatGlobalError'));
     }
-    console.log('ojj ')
 
-    // console.log('hit here')
     // validate version info
     PackageRequest.validateVersionInfo(info, this.reporter);
     //
     const remote = info._remote;
     invariant(remote, 'Missing remote');
 
-    // console.log('hit here')
     // TODO: errors are being swallowed up here!
 
-    console.log('woeifjoij ')
-    console.log('woeifjoij22 ', remote, 'test')
     // set package reference
     const ref = new PackageReference(this, info, remote);
-    console.log('shuld her ')
     ref.addPattern(this.pattern, info);
     ref.addOptional(this.optional);
     ref.addVisibility(this.visibility);
@@ -378,8 +363,6 @@ export default class PackageRequest {
     await Promise.all(promises);
     ref.addDependencies(deps);
   }
-
-
 
   /**
    * TODO description

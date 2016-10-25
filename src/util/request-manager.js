@@ -173,14 +173,8 @@ export default class RequestManager {
       return Promise.reject(new MessageError("Can't make a request in offline mode"));
     }
 
-    if (params.url.indexOf('ignore-rules') > 0 || params.url.indexOf('miniglob') > 0) {
-      console.log('requesting for the metadata inside: ', params.url)
-    }
-
     const cached = this.cache[params.url];
-    // console.log('requesting for the metadata inside: ', params.url)
     if (cached) {
-      console.log('returning cached data ', params.url)
       return cached;
     }
 
@@ -188,7 +182,6 @@ export default class RequestManager {
     params.forever = true;
     params.retryAttempts = 0;
     params.strictSSL = this.strictSSL;
-
     params.headers = Object.assign({
       'User-Agent': this.userAgent,
     }, params.headers);

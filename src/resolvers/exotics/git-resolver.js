@@ -62,18 +62,9 @@ export default class GitResolver extends ExoticResolver {
     return false;
   }
 
-  // async getPackageMetadata(): Promise<Manifest> {
-  //   const {url} = this;
-  //   console.log('url', url)
-
-  //   const parts = urlParse(url);
-
-  // }
-
   async resolve(forked?: true): Promise<Manifest> {
     const {url} = this;
 
-    console.log('inside resolve', url)
     // shortcut for hosted git. we will fallback to a GitResolver if the hosted git
     // optimisations fail which the `forked` flag indicates so we don't get into an
     // infinite loop
@@ -103,7 +94,6 @@ export default class GitResolver extends ExoticResolver {
     }
 
     const client = new Git(this.config, url, this.hash);
-    console.log('inside hh')
     const commit = await client.initRemote();
 
     async function tryRegistry(registry): Promise<?Manifest> {
@@ -115,7 +105,6 @@ export default class GitResolver extends ExoticResolver {
       }
 
       const json = JSON.parse(file);
-      console.log('this is the versions', json.version)
       json._uid = commit;
       json._remote = {
         resolved: `${url}#${commit}`,
@@ -128,7 +117,6 @@ export default class GitResolver extends ExoticResolver {
     }
 
     const file = await tryRegistry(this.registry);
-    // console.log('file', file)
     if (file) {
       return file;
     }
