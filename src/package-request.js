@@ -288,8 +288,10 @@ export default class PackageRequest {
    */
 
   async find(): Promise<void> {
+    console.log('hist')
     // find version info for this package pattern
     const info: ?Manifest = await this.findVersionInfo();
+    console.log('info', info)
     if (!info) {
       throw new MessageError(this.reporter.lang('unknownPackage', this.pattern));
     }

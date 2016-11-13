@@ -416,6 +416,7 @@ export default class PackageResolver {
     }
 
     if (this.flat) {
+      // console.log('once')
       return await this.constraintResolver.addPackage(req)
     } else {
       const request = new PackageRequest(req, this);
@@ -436,6 +437,8 @@ export default class PackageResolver {
 
     //
     this.seedPatterns = deps.map((dep): string => dep.pattern);
+
+    console.log('seed', this.seedPatterns, deps)
 
     //
     await Promise.all(deps.map((req): Promise<void> => this.find(req)));

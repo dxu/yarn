@@ -88,11 +88,15 @@ export default class PackageConstraintResolver {
 
     const request = new PackageRequest(req, this.resolver);
 
+    // TODO: we need to be able to differentiate metadata from different sources for packages of the same name.
+    // probably need to extend this map to contain mappings to url, or something?
 
     // find the version info
     let info: ?Manifest =
       await request.getPackageMetadata();
 
+    // console.log('hoaijweoij', info)
+    // throw new Error()
     if (!info) {
       // The package can no longer be found. Because this algorithm runs
       // through ALL possible packages and dependencies, this will happen often
@@ -172,6 +176,7 @@ export default class PackageConstraintResolver {
     // them post traveral!
     while (queue.length > 0) {
       const [level, name, range, parent] = queue.shift()
+    console.log('tld', topLevelDependencies, range)
       this.solvePackage(queue, level, name, range, parent)
     }
 
@@ -263,80 +268,55 @@ export default class PackageConstraintResolver {
 
     const negatedParent = `-${parent}`
 
-    // TODO: make check more robust
-    // string of the form XXXX.XXXX.XXXX where X is a digit from 0-9
-    let explicitSemverRegex = /^[0-9]+\.[0-9]+.[0-9]+$/
+    valid = Object.keys(pkg.versions).
+      filter((ver) => {
+        return semver.satisfies(ver, currentVersionRange)
+      })
+    console.log(pkg)
+    // console.log('valid', valid, pkg.versions)
 
-    // currentVersionRange is not a semver range, just a single version
-    if (currentVersionRange.match(explicitSemverRegex)) {
-      if (parent != null) {
-        const logicTerm = this._createLogicTerm(pkg.name, currentVersionRange)
-        const negatedLogicTerm = `-${logicTerm}`;
-        // if it is NOT a tld, if the parent is true, then this will be true
-        this.logicSolver.require(
-          Logic.implies(parent, logicTerm)
-        )
-        // if the dependency is false, then the parent is false.
-        // this.logicSolver.require(
-        //   Logic.implies(negatedLogicTerm, negatedParent)
-        // )
-
-      } else {
-        // this is an explicit TLD. you'll need to require it.
-        this.logicSolver.require(
-          this._createLogicTerm(pkg.name, currentVersionRange)
-        )
-      }
-      valid = [currentVersionRange]
-    }
-    // otherwise there's a range, require at most one of
-    // all the versions that match
-    else {
-      valid = Object.keys(pkg.versions).
-        filter((ver) => {
-          return semver.satisfies(ver, currentVersionRange)
-        })
-
-      const validLogicTerms =
-        valid.map(ver => this._createLogicTerm(pkg.name, ver))
-      const negatedValidLogicTerms =
-        validLogicTerms.map(ver => `-${ver}`)
-      if (parent != null) {
-        // if it's not a TLD, the parent being true implies that
-        // exactly one here is true
-        this.logicSolver.require(
-          Logic.implies(
-            parent,
-            Logic.exactlyOne(
-              ...validLogicTerms
-            )
-          )
-        );
-        // if all of the valid logic terms are negated (i.e, they are false),
-        // then it implies that the parent is false
-        // this.logicSolver.require(
-        //   Logic.implies(
-        //     Logic.or(
-        //       ...negatedValidLogicTerms,
-        //     ),
-        //     negatedParent,
-        //   )
-        // );
-      } else {
-        // if it's a TLD, exactly one is definitely true.
-        this.logicSolver.require(
+    const validLogicTerms =
+      valid.map(ver => this._createLogicTerm(pkg.name, ver))
+    const negatedValidLogicTerms =
+      validLogicTerms.map(ver => `-${ver}`)
+    if (parent != null) {
+      // if it's not a TLD, the parent being true implies that
+      // exactly one here is true
+      this.logicSolver.require(
+        Logic.implies(
+          parent,
           Logic.exactlyOne(
             ...validLogicTerms
           )
         )
-      }
+      );
+      // if all of the valid logic terms are negated (i.e, they are false),
+      // then it implies that the parent is false
+      // this.logicSolver.require(
+      //   Logic.implies(
+      //     Logic.or(
+      //       ...negatedValidLogicTerms,
+      //     ),
+      //     negatedParent,
+      //   )
+      // );
+    } else {
+      // if it's a TLD, exactly one is definitely true.
+      this.logicSolver.require(
+        Logic.exactlyOne(
+          ...validLogicTerms
+        )
+      )
     }
 
+    console.log('valid', valid)
     // filter out the patterns we've already visited while solving packages
     valid = valid.filter((version) => {
       const logicTerm = this._createLogicTerm(pkg.name, version)
       return this.visited[logicTerm] == null
     })
+
+    console.log('valid', valid)
 
     // for every valid, you must go through all valid versions.
     // for every valid version, solvePackage on every dependency with
