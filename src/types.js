@@ -122,6 +122,10 @@ export type Manifest = {
 
   deprecated?: string,
   files?: Array<string>,
+
+
+  // TODO: used for fetching the overall package dependency metadata
+  versions: Object,
 };
 
 //

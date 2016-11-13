@@ -182,7 +182,6 @@ export default class RequestManager {
     params.forever = true;
     params.retryAttempts = 0;
     params.strictSSL = this.strictSSL;
-    
     params.headers = Object.assign({
       'User-Agent': this.userAgent,
     }, params.headers);

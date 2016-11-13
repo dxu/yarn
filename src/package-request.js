@@ -19,6 +19,8 @@ const invariant = require('invariant');
 
 type ResolverRegistryNames = $Keys<typeof registryResolvers>;
 
+import NpmResolver from './resolvers/registries/npm-resolver.js'
+
 export default class PackageRequest {
   constructor(req: DependencyRequestPattern, resolver: PackageResolver) {
     this.parentRequest = req.parentRequest;
@@ -200,13 +202,96 @@ export default class PackageRequest {
     }
   }
 
+
+  // adds some basic information necessary for the package extraction
+  normalizePackageMetadata(name, body) {
+    const metadata = {name}
+    metadata.versions = {[body.version]: body};
+    return metadata
+  }
+
+  // gets ONLY package metadata from https://registry.yarnpkg.com/<package>.
+  // Delegates to the appropriate registry resolver
+  async getPackageMetadata(): Promise<?Manifest> {
+    const {range, name} = PackageRequest.normalizePattern(this.pattern)
+
+    const ExoticResolver = PackageRequest.getExoticResolver(range);
+    if (ExoticResolver) {
+      // const resolver = new ExoticResolver(this, this.pattern);
+      // We should be able to just use findExoticVersionInfo, because
+      // there should be no "ranges" of versions.
+      const body = await this.findExoticVersionInfo(ExoticResolver, range);
+      // normalize the metadata for dependencies
+      return this.normalizePackageMetadata(name, body)
+    } else {
+      const Resolver = this.getRegistryResolver();
+      // TODO: need to implement getPackageMetadata on all resolvers
+      return await Resolver.getPackageMetadata(this.config, name);
+    }
+  }
+
+  // For use in flatten, because the package metadata is fetched first,
+  // before the version is determined
+  updatePattern(pattern: string): void {
+    this.pattern = pattern
+  }
+
+  // TODO: Add the resolved field back into the package.json!!!
+  // what you should use after getPackageMetadata
+  // TODO: dedupe from the method below
+  async setupPackageReferences(): Promise<?Manifest> {
+    // find version info for this package pattern
+    const info: ?Manifest = await this.findVersionInfo();
+
+    if (info.flat && !this.resolver.flat) {
+      throw new MessageError(this.reporter.lang('flatGlobalError'));
+    }
+
+    // validate version info
+    PackageRequest.validateVersionInfo(info, this.reporter);
+    //
+    const remote = info._remote;
+    invariant(remote, 'Missing remote');
+
+    // TODO: errors are being swallowed up here!
+
+    // set package reference
+    const ref = new PackageReference(this, info, remote);
+    ref.addPattern(this.pattern, info);
+    ref.addOptional(this.optional);
+    ref.addVisibility(this.visibility);
+    info._reference = ref;
+    info._remote = remote;
+
+    // start installation of dependencies
+    const deps = [];
+
+    // normal deps
+    for (const depName in info.dependencies) {
+      const depPattern = depName + '@' + info.dependencies[depName];
+      deps.push(depPattern);
+    }
+
+    // optional deps
+    for (const depName in info.optionalDependencies) {
+      const depPattern = depName + '@' + info.optionalDependencies[depName];
+      deps.push(depPattern);
+    }
+
+    ref.addDependencies(deps);
+
+    return info
+  }
+
   /**
    * TODO description
    */
 
   async find(): Promise<void> {
+    console.log('hist')
     // find version info for this package pattern
     const info: ?Manifest = await this.findVersionInfo();
+    console.log('info', info)
     if (!info) {
       throw new MessageError(this.reporter.lang('unknownPackage', this.pattern));
     }
